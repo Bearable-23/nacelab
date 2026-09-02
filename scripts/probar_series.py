@@ -66,6 +66,15 @@ def probar_banxico(series, crudo: bool) -> None:
         print("  (no hay series de Banxico en el catálogo)")
         return
 
+    if not fetch.hay_token("BANXICO_TOKEN"):
+        print("  ⊘  Sin BANXICO_TOKEN en .env — fuente saltada")
+        return
+
+    series = [s for s in series if s.lista]
+    if not series:
+        print("  (ninguna serie de Banxico tiene id todavía)")
+        return
+
     ids = [s.fuente_id for s in series]
     mapeo = {s.fuente_id: s.id for s in series}
     print(f"  Pidiendo en una sola petición: {', '.join(ids)}")
@@ -94,9 +103,18 @@ def probar_inegi(series, defaults: dict, crudo: bool) -> None:
         print("  (no hay series del INEGI en el catálogo)")
         return
 
+    if not fetch.hay_token("INEGI_TOKEN"):
+        print("  ⊘  Sin INEGI_TOKEN en .env — fuente saltada")
+        return
+
     for serie in series:
+        if not serie.lista:
+            print(f"\n  [PENDIENTE] {serie.id} — sin id todavía")
+            print(f"              {serie.nota.strip()}")
+            continue
+
         estado = "verificado" if serie.verificado else "SIN VERIFICAR"
-        print(f"\n  [{estado}] {serie.id} — id {serie.fuente_id}")
+        print(f"\n  [{estado}] {serie.id} — id {serie.fuente_id} ({serie.banco})")
         print(f"  Esperamos que sea: {serie.nombre}")
 
         try:
@@ -105,7 +123,7 @@ def probar_inegi(series, defaults: dict, crudo: bool) -> None:
                 idioma=defaults.get("idioma", "es"),
                 entidad=defaults.get("entidad", "00"),
                 serie_historica=defaults.get("serie_historica", False),
-                banco=defaults.get("banco", "BIE"),
+                banco=serie.banco,
                 version=defaults.get("version", "2.0"),
             )
         except Exception as e:  # noqa: BLE001

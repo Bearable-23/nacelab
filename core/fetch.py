@@ -49,6 +49,11 @@ def _token(nombre: str) -> str:
     return valor
 
 
+def hay_token(nombre: str) -> bool:
+    """¿Está configurado este token? Permite saltar una fuente sin abortar todo."""
+    return bool(os.environ.get(nombre, "").strip())
+
+
 def _ocultar_token(url: str, token: str) -> str:
     """Para poder imprimir o loguear una URL sin filtrar la credencial."""
     return url.replace(token, "***TOKEN***")
@@ -136,10 +141,22 @@ def inegi_crudo(
         f"{INEGI_BASE}/{indicador}/{idioma}/{entidad}/{historica}"
         f"/{banco}/{version}/{token}?type=json"
     )
+    url_segura = _ocultar_token(url, token)
 
-    resp = requests.get(url, timeout=TIMEOUT)
-    resp.raise_for_status()
-    return resp.json(), _ocultar_token(url, token)
+    # El INEGI exige el token dentro de la ruta, así que CUALQUIER cosa que
+    # exponga la URL lo filtra. `raise_for_status()` la mete en el texto de la
+    # excepción, que después acaba en logs, en stderr y en reportes de error.
+    # Por eso se re-lanza siempre con la URL enmascarada.
+    try:
+        resp = requests.get(url, timeout=TIMEOUT)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise requests.RequestException(
+            f"{type(e).__name__} al pedir el indicador {indicador}: "
+            f"{_ocultar_token(str(e), token)}"
+        ) from None  # from None: corta el encadenado, que también trae la URL
+
+    return resp.json(), url_segura
 
 
 def _fecha_inegi(periodo: str) -> date:
@@ -163,18 +180,39 @@ def _fecha_inegi(periodo: str) -> date:
 def inegi_parsear(payload: dict, serie_id: str) -> list[Observacion]:
     """Convierte la respuesta del INEGI a observaciones.
 
-    Formato esperado:
-        {"Series": [{"INDICADOR": "...", "FREQ": "...", "UNIT": "...",
-                     "OBSERVATIONS": [{"TIME_PERIOD": "2024/01",
-                                       "OBS_VALUE": "133.55"}]}]}
+    Estructura real, confirmada contra la API con el indicador 1002000001:
+
+        {"Header": {...},
+         "Series": [{"INDICADOR": "1002000001",
+                     "FREQ": "7", "UNIT": "188", "UNIT_MULT": "...",
+                     "TOPIC": "123", "NOTE": "1398", "SOURCE": "2,3,343,...",
+                     "LASTUPDATE": "21/10/2024 12:00:00 a. m.",
+                     "OBSERVATIONS": [{"TIME_PERIOD": "2020",
+                                       "OBS_VALUE": "126014024.00000000000000000000",
+                                       "OBS_EXCEPTION": None, "OBS_STATUS": "3",
+                                       "OBS_SOURCE": "", "OBS_NOTE": "",
+                                       "COBER_GEO": "0"}]}]}
+
+    Dos cosas que no son obvias y que hay que manejar:
+      - FREQ, UNIT, TOPIC, NOTE y SOURCE son CÓDIGOS de catálogo, no texto.
+        `UNIT: 188` no dice "índice"; hay que resolverlo contra las tablas
+        de metadatos del INEGI. Por eso no sirven para verificar un id a ojo.
+      - Las observaciones llegan en orden DESCENDENTE (la más reciente primero).
+        Se ordenan aquí para que quien consuma esto no dependa del orden de la API.
     """
     obs: list[Observacion] = []
 
     for serie in payload.get("Series", []):
         for punto in serie.get("OBSERVATIONS", []):
+            # OBS_EXCEPTION marca un dato no disponible o suprimido.
+            # Un hueco no es un cero: se omite para que quede nulo.
+            if punto.get("OBS_EXCEPTION"):
+                continue
+
             valor_txt = punto.get("OBS_VALUE")
             if valor_txt in (None, "", "N/A"):
                 continue
+
             obs.append(
                 Observacion(
                     serie_id=serie_id,
@@ -183,4 +221,4 @@ def inegi_parsear(payload: dict, serie_id: str) -> list[Observacion]:
                 )
             )
 
-    return obs
+    return sorted(obs, key=lambda o: o.fecha)

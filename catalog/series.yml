@@ -5,10 +5,10 @@
 # y material de los tutoriales.
 #
 # CAMPO `verificado`:
-#   true  = el id fue confirmado contra la API y devuelve lo que dice el nombre
-#   false = el id es un candidato SIN CONFIRMAR. No construyas nada encima.
+#   true  = el id fue confirmado CONTRA LA API y devuelve lo que dice el nombre
+#   false = candidato SIN CONFIRMAR. No construyas nada encima.
 #
-# Para confirmar un id:  python scripts/probar_series.py
+# Para probar:  python scripts/probar_series.py
 
 series:
 
@@ -19,43 +19,74 @@ series:
     fuente_id: SF43718
     frecuencia: diaria
     unidad: mxn_por_usd
-    verificado: true
+    verificado: false
     nota: >
-      Confirmado: SF43718 es "Pesos por Dólar. FIX" en el SIE.
-      Es el tipo de cambio para solventar obligaciones en moneda extranjera,
-      publicado en el DOF el día hábil siguiente.
+      El id está documentado como "Pesos por Dólar. FIX" en el SIE, pero
+      todavía no se probó contra la API por falta de BANXICO_TOKEN.
 
   # ------------------------------------------------------------------ INEGI --
-  # Los ids de abajo son CANDIDATOS tomados de ejemplos de documentación.
-  # No los di por buenos. El script de prueba consulta la API y te muestra qué
-  # devuelve realmente cada uno, para que los confirmes tú antes de usarlos.
-  #
-  # Para buscar ids reales: https://www.inegi.org.mx/app/indicadores/
-  # (navegas al indicador y el id aparece en la URL / en "Detalles")
+  - id: poblacion_total
+    nombre: Población total de México
+    fuente: inegi
+    fuente_id: "1002000001"
+    banco: BISE
+    frecuencia: irregular
+    unidad: personas
+    verificado: true
+    nota: >
+      CONFIRMADO contra la API (2026-09-02): HTTP 200, 15 observaciones,
+      censos de 1910 a 2020, último valor 126,014,024 en 2020.
+      Es el ejemplo de la documentación oficial. No es un indicador que el
+      sitio vaya a mostrar: sirve como prueba de humo de que el pipeline
+      completo funciona de punta a punta.
 
+  # PENDIENTES — ver nota sobre el BIE más abajo.
+  # Los ids reales se sacan del constructor de consultas:
+  #   https://www.inegi.org.mx/app/querybuilder2/default.html
   - id: inpc_general
     nombre: INPC general (base 2Q julio 2018)
     fuente: inegi
-    fuente_id: "628194"
+    fuente_id: null
+    banco: BISE
     frecuencia: mensual
     unidad: indice
     verificado: false
-    nota: Candidato sin confirmar. Correr scripts/probar_series.py
+    nota: Falta el id real. Sacarlo del constructor de consultas.
 
   - id: igae
     nombre: Indicador Global de la Actividad Económica
     fuente: inegi
-    fuente_id: "496150"
+    fuente_id: null
+    banco: BISE
     frecuencia: mensual
     unidad: indice
     verificado: false
-    nota: Candidato sin confirmar. Correr scripts/probar_series.py
+    nota: Falta el id real. Sacarlo del constructor de consultas.
 
 
-# Parámetros por defecto de la API del INEGI (ver core/fetch.py)
+# ---------------------------------------------------------------------------
+# HALLAZGO: el banco "BIE" parece deprecado en la v2.0 de la API
+# ---------------------------------------------------------------------------
+# Probado el 2026-09-02 con token válido:
+#   1002000001 + BISE  -> 200 OK
+#   1002000001 + BIE   -> 400 "No se encontraron resultados" (ErrorCode 100)
+#   628229 + BIE       -> 400  (id que documenta la librería INEGIpy)
+#   628194, 628228, 628230, 910406, 216064, 444612, 381016 + BIE -> 400
+#
+# Ningún id de 6 dígitos respondió. El único que funciona es de 10 dígitos con
+# BISE, y la documentación oficial vigente solo lista BISE como fuente de datos.
+#
+# Conclusión provisional: los ids de 6 dígitos que circulan en blogs, tutoriales
+# y librerías son de la v1 de la API y ya no sirven. Hay que sacar ids nuevos
+# del constructor de consultas.
+#
+# Esto es material para el tutorial 1: es el primer muro con el que se topa
+# cualquiera que intente usar la API del INEGI siguiendo un blog viejo.
+# ---------------------------------------------------------------------------
+
 inegi_defaults:
   idioma: es           # es | en
   entidad: "00"        # 00 nacional | 99 por entidad | 999 por municipio
-  serie_historica: false   # false = serie completa | true = solo el dato más reciente
-  banco: BIE           # BIE (económicos) | BISE (censos y encuestas)
+  serie_historica: false   # false = serie completa | true = solo el último dato
+  banco: BISE          # BIE quedó deprecado (ver arriba)
   version: "2.0"

@@ -21,11 +21,17 @@ class Serie:
     id: str
     nombre: str
     fuente: str  # 'inegi' | 'banxico'
-    fuente_id: str
+    fuente_id: str | None  # None = todavía no sabemos el id real
     frecuencia: str
     unidad: str
+    banco: str = "BISE"  # solo aplica a INEGI: BISE | BIE (BIE parece deprecado)
     verificado: bool = False
     nota: str = ""
+
+    @property
+    def lista(self) -> bool:
+        """¿Se puede pedir esta serie a la API?"""
+        return self.fuente_id is not None
 
 
 def cargar_catalogo(ruta: Path = RUTA_CATALOGO) -> tuple[list[Serie], dict]:
