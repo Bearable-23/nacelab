@@ -1,0 +1,8 @@
+# Normaliza finales de línea. Desarrollas en Windows pero esto corre en Linux
+# (Cloud Run); sin esto, cada archivo tocado en la otra máquina aparece como
+# modificado entero en el diff.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.parquet binary

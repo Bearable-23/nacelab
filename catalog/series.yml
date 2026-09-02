@@ -1,0 +1,61 @@
+# Catálogo de series — el corazón del proyecto.
+#
+# Agregar un indicador debe ser editar unas líneas aquí, nunca escribir un script.
+# Este archivo es a la vez: configuración del pipeline, documentación del sitio
+# y material de los tutoriales.
+#
+# CAMPO `verificado`:
+#   true  = el id fue confirmado contra la API y devuelve lo que dice el nombre
+#   false = el id es un candidato SIN CONFIRMAR. No construyas nada encima.
+#
+# Para confirmar un id:  python scripts/probar_series.py
+
+series:
+
+  # ---------------------------------------------------------------- BANXICO --
+  - id: fix
+    nombre: Tipo de cambio FIX (pesos por dólar)
+    fuente: banxico
+    fuente_id: SF43718
+    frecuencia: diaria
+    unidad: mxn_por_usd
+    verificado: true
+    nota: >
+      Confirmado: SF43718 es "Pesos por Dólar. FIX" en el SIE.
+      Es el tipo de cambio para solventar obligaciones en moneda extranjera,
+      publicado en el DOF el día hábil siguiente.
+
+  # ------------------------------------------------------------------ INEGI --
+  # Los ids de abajo son CANDIDATOS tomados de ejemplos de documentación.
+  # No los di por buenos. El script de prueba consulta la API y te muestra qué
+  # devuelve realmente cada uno, para que los confirmes tú antes de usarlos.
+  #
+  # Para buscar ids reales: https://www.inegi.org.mx/app/indicadores/
+  # (navegas al indicador y el id aparece en la URL / en "Detalles")
+
+  - id: inpc_general
+    nombre: INPC general (base 2Q julio 2018)
+    fuente: inegi
+    fuente_id: "628194"
+    frecuencia: mensual
+    unidad: indice
+    verificado: false
+    nota: Candidato sin confirmar. Correr scripts/probar_series.py
+
+  - id: igae
+    nombre: Indicador Global de la Actividad Económica
+    fuente: inegi
+    fuente_id: "496150"
+    frecuencia: mensual
+    unidad: indice
+    verificado: false
+    nota: Candidato sin confirmar. Correr scripts/probar_series.py
+
+
+# Parámetros por defecto de la API del INEGI (ver core/fetch.py)
+inegi_defaults:
+  idioma: es           # es | en
+  entidad: "00"        # 00 nacional | 99 por entidad | 999 por municipio
+  serie_historica: false   # false = serie completa | true = solo el dato más reciente
+  banco: BIE           # BIE (económicos) | BISE (censos y encuestas)
+  version: "2.0"

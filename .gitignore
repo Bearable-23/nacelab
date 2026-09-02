@@ -1,0 +1,39 @@
+# ---- Credenciales: NUNCA commitear ----
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.toml
+.streamlit/secrets.toml
+
+# Llaves de service account de GCP. No deberían existir nunca (ver doc 04),
+# pero si alguna aparece, que git no la vea.
+*-key.json
+*credentials*.json
+*service-account*.json
+application_default_credentials.json
+gcp-*.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# ---- Datos locales ----
+data/
+*.parquet
+*.duckdb
+*.sqlite
+
+# ---- Sistema ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
