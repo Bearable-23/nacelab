@@ -57,18 +57,21 @@ series:
       Coincide con el subyacente y NO coincide con el general: dos vías
       independientes apuntan al mismo lado.
 
-  # Prueba de aceptación para cuando aparezca el id del general:
-  # su valor de 2026/07 tiene que ser 145.169 y su variación anual 3.12%.
-  # Si no da eso, el id está mal por más que responda 200.
   - id: inpc_general
     nombre: INPC general (índice base 2Q julio 2018 = 100)
     fuente: inegi
-    fuente_id: null
+    fuente_id: "334360"
     banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
-    verificado: false
-    nota: Falta el id. Sacarlo del constructor de consultas.
+    verificado: true
+    nota: >
+      CONFIRMADO 2026-09-02. 403 observaciones, 1993/01 a 2026/07,
+      actualizado 2026-08-24.
+      La prueba de aceptación se fijó ANTES de conocer el id: 2026/07 tenía
+      que dar 145.169 según el boletín del INEGI. La serie da 145.1690.
+      Corrobora que comparte TOPIC 682416, UNIT 1012 y SOURCE 1068 con el
+      subyacente: son series hermanas del mismo cuadro.
 
   - id: igae
     nombre: Indicador Global de la Actividad Económica
