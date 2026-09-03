@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import altair as alt  # noqa: E402
+import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
@@ -78,9 +79,20 @@ def main():
         st.warning("Sin datos para esta serie.")
         return
 
-    anios = st.slider("Años a mostrar", 1, 35, 10)
-    corte = df["fecha"].max() - __import__("pandas").DateOffset(years=anios)
-    vista = df[df["fecha"] >= corte.date()] if hasattr(corte, "date") else df
+    # El rango del slider se adapta a la historia real de cada serie. Un tope
+    # fijo de 35 años dejaba fuera un siglo de censos de población.
+    historia = (df["fecha"].max() - df["fecha"].min()).days // 365 + 1
+    anios = st.slider("Años a mostrar", 1, max(historia, 2), min(10, historia))
+
+    corte = pd.Timestamp(df["fecha"].max()) - pd.DateOffset(years=anios)
+    vista = df[df["fecha"] >= corte.date()]
+
+    # Una serie irregular puede quedarse con un solo punto, y una línea
+    # necesita dos: el resultado seria un lienzo en blanco sin explicacion.
+    # Pasa con los censos, que van cada 5 o 10 años.
+    recortada_de_mas = len(vista) < 2
+    if recortada_de_mas:
+        vista = df
 
     ultimo = df.iloc[-1]
 
@@ -92,11 +104,22 @@ def main():
 
         grafica = (
             alt.Chart(vista)
-            .mark_line()
+            # point=True dibuja cada observación además de la línea. Con
+            # series de baja frecuencia es la diferencia entre ver los datos
+            # y ver un lienzo vacío.
+            .mark_line(point=True)
             .encode(
                 x=alt.X("fecha:T", title=None),
-                y=alt.Y(f"{eje}:Q", title=titulo),
-                tooltip=["fecha:T", alt.Tooltip(f"{eje}:Q", format=".2f")],
+                y=alt.Y(
+                    f"{eje}:Q",
+                    title=titulo,
+                    # En una serie de nivel, anclar el eje en cero aplasta la
+                    # variación: 112 a 126 millones se ve como línea plana
+                    # pegada al techo. En una de inflación el cero sí
+                    # significa algo, así que ahí se conserva.
+                    scale=alt.Scale(zero=elegida in ES_PRECIOS),
+                ),
+                tooltip=["fecha:T", alt.Tooltip(f"{eje}:Q", format=",.2f")],
             )
             .properties(height=340)
         )
@@ -110,6 +133,13 @@ def main():
             )
             grafica = grafica + meta_linea
         st.altair_chart(grafica, use_container_width=True)
+
+        if recortada_de_mas:
+            st.caption(
+                f"Se muestra la serie completa: con {anios} año(s) quedaba "
+                f"menos de una observación. Esta serie es de frecuencia "
+                f"**{meta[elegida]['frecuencia']}**."
+            )
 
     with der:
         st.markdown(f"**{meta[elegida]['nombre']}**")
