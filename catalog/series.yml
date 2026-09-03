@@ -5,8 +5,10 @@
 # y material de los tutoriales.
 #
 # CAMPO `verificado`:
-#   true  = el id fue confirmado CONTRA LA API y devuelve lo que dice el nombre
-#   false = candidato SIN CONFIRMAR. No construyas nada encima.
+#   true  = confirmado contra la API Y confirmado que es EL indicador que dice ser
+#   false = no confirmado. Ojo: que un id responda 200 no significa que sea
+#           el indicador correcto. Devolver datos plausibles de otra serie es
+#           justo el modo de falla que hay que evitar.
 #
 # Para probar:  python scripts/probar_series.py
 
@@ -21,8 +23,8 @@ series:
     unidad: mxn_por_usd
     verificado: false
     nota: >
-      El id está documentado como "Pesos por Dólar. FIX" en el SIE, pero
-      todavía no se probó contra la API por falta de BANXICO_TOKEN.
+      Documentado como "Pesos por Dólar. FIX" en el SIE. Sin probar todavía:
+      falta BANXICO_TOKEN.
 
   # ------------------------------------------------------------------ INEGI --
   - id: poblacion_total
@@ -34,59 +36,66 @@ series:
     unidad: personas
     verificado: true
     nota: >
-      CONFIRMADO contra la API (2026-09-02): HTTP 200, 15 observaciones,
-      censos de 1910 a 2020, último valor 126,014,024 en 2020.
-      Es el ejemplo de la documentación oficial. No es un indicador que el
-      sitio vaya a mostrar: sirve como prueba de humo de que el pipeline
-      completo funciona de punta a punta.
+      CONFIRMADO 2026-09-02: 15 observaciones, censos 1910-2020,
+      126,014,024 en 2020. Es el ejemplo de la documentación oficial.
+      No se va a mostrar en el sitio: es la prueba de humo del pipeline.
 
-  # PENDIENTES — ver nota sobre el BIE más abajo.
-  # Los ids reales se sacan del constructor de consultas:
-  #   https://www.inegi.org.mx/app/querybuilder2/default.html
-  - id: inpc_general
-    nombre: INPC general (base 2Q julio 2018)
+  - id: inpc_por_identificar
+    nombre: Índice de precios al consumidor (falta saber si general o subyacente)
     fuente: inegi
-    fuente_id: null
-    banco: BISE
+    fuente_id: "334452"
+    banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
     verificado: false
-    nota: Falta el id real. Sacarlo del constructor de consultas.
+    nota: >
+      RESPONDE PERO SIN IDENTIFICAR. 403 observaciones, 1993/01 a 2026/07,
+      último valor 146.0001, variación anual implícita 3.95%, actualizado
+      2026-08-24. Los datos son buenos y la frecuencia es mensual.
+      Lo que falta es saber CUÁL de los dos índices es: se sacó del
+      constructor de consultas con "Precios al Consumidor" y "Precios al
+      Consumidor Subyacente" en pantalla. Se distingue comparando contra el
+      otro: el subyacente excluye energéticos y agropecuarios, así que es
+      notoriamente menos volátil.
 
   - id: igae
     nombre: Indicador Global de la Actividad Económica
     fuente: inegi
     fuente_id: null
-    banco: BISE
+    banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
     verificado: false
-    nota: Falta el id real. Sacarlo del constructor de consultas.
+    nota: Falta el id. Sacarlo del constructor de consultas.
 
 
 # ---------------------------------------------------------------------------
-# HALLAZGO: el banco "BIE" parece deprecado en la v2.0 de la API
+# HALLAZGO: el parámetro de fuente debe coincidir con el banco del indicador
 # ---------------------------------------------------------------------------
 # Probado el 2026-09-02 con token válido:
-#   1002000001 + BISE  -> 200 OK
-#   1002000001 + BIE   -> 400 "No se encontraron resultados" (ErrorCode 100)
-#   628229 + BIE       -> 400  (id que documenta la librería INEGIpy)
-#   628194, 628228, 628230, 910406, 216064, 444612, 381016 + BIE -> 400
 #
-# Ningún id de 6 dígitos respondió. El único que funciona es de 10 dígitos con
-# BISE, y la documentación oficial vigente solo lista BISE como fuente de datos.
+#   334452     + BIE-BISE  -> 200, 403 obs (índice de precios, mensual)
+#   334452     + BIE       -> 400
+#   628194     + BIE-BISE  -> 200  (pero LASTUPDATE 2024-10: serie descontinuada)
+#   628229     + BIE-BISE  -> 200
+#   1002000001 + BISE      -> 200  (población)
+#   1002000001 + BIE-BISE  -> 400
+#   496150, 381016 + BIE-BISE -> 400  (esos sí no existen)
 #
-# Conclusión provisional: los ids de 6 dígitos que circulan en blogs, tutoriales
-# y librerías son de la v1 de la API y ya no sirven. Hay que sacar ids nuevos
-# del constructor de consultas.
+# No hay un valor de `banco` universal:
+#   BIE-BISE  económicos de coyuntura (INPC, IGAE, empleo, producción)
+#   BISE      censos y encuestas (población, vivienda)
 #
-# Esto es material para el tutorial 1: es el primer muro con el que se topa
-# cualquiera que intente usar la API del INEGI siguiendo un blog viejo.
+# Por eso `banco` es un campo POR SERIE, no un default global.
+#
+# Nota sobre series descontinuadas: 628194 responde 200 y devuelve datos que
+# se ven perfectamente normales, pero su última actualización es de octubre
+# de 2024. Un id que responde no es un id vigente. Siempre hay que mirar
+# LASTUPDATE antes de construir encima.
 # ---------------------------------------------------------------------------
 
 inegi_defaults:
-  idioma: es           # es | en
-  entidad: "00"        # 00 nacional | 99 por entidad | 999 por municipio
-  serie_historica: false   # false = serie completa | true = solo el último dato
-  banco: BISE          # BIE quedó deprecado (ver arriba)
+  idioma: es              # es | en
+  entidad: "00"           # 00 nacional | 99 por entidad | 999 por municipio
+  dato_reciente: false    # false = serie histórica completa | true = solo la última obs
   version: "2.0"

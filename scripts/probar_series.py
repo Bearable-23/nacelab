@@ -19,6 +19,7 @@ Uso:
 import argparse
 import json
 import sys
+from datetime import date, datetime
 from pathlib import Path
 
 # La consola de Windows usa cp1252 por defecto y revienta con acentos y símbolos.
@@ -43,6 +44,26 @@ def linea(titulo: str = "") -> None:
     if titulo:
         print(titulo)
         print("─" * 72)
+
+
+def alerta_serie_vieja(lastupdate: str | None, frecuencia: str, meses: int = 6) -> None:
+    """Avisa si el INEGI no ha actualizado una serie que debería estar viva.
+
+    El umbral tiene que depender de la frecuencia: un censo lleva años sin
+    moverse y está perfectamente sano; un indicador mensual con seis meses
+    de atraso, no.
+    """
+    if not lastupdate or frecuencia in ("irregular", "quinquenal", "anual"):
+        return
+    try:
+        fecha = datetime.strptime(lastupdate.split(" ")[0], "%d/%m/%Y").date()
+    except ValueError:
+        return
+
+    dias = (date.today() - fecha).days
+    if dias > meses * 30:
+        print(f"     ⚠  Sin actualizar desde hace {dias // 30} meses "
+              f"({fecha}). ¿Serie descontinuada?")
 
 
 def resumen_observaciones(obs: list, nombre: str) -> None:
@@ -122,7 +143,7 @@ def probar_inegi(series, defaults: dict, crudo: bool) -> None:
                 indicador=serie.fuente_id,
                 idioma=defaults.get("idioma", "es"),
                 entidad=defaults.get("entidad", "00"),
-                serie_historica=defaults.get("serie_historica", False),
+                dato_reciente=defaults.get("dato_reciente", False),
                 banco=serie.banco,
                 version=defaults.get("version", "2.0"),
             )
@@ -147,6 +168,11 @@ def probar_inegi(series, defaults: dict, crudo: bool) -> None:
         for campo in ("INDICADOR", "FREQ", "UNIT", "TOPIC", "LASTUPDATE", "SOURCE"):
             if campo in meta:
                 print(f"     {campo:<12} {meta[campo]}")
+
+        # Una serie descontinuada responde 200 y devuelve datos de aspecto normal.
+        # Lo único que la delata es LASTUPDATE. Pasó con el indicador 628194,
+        # cuya última actualización es de octubre de 2024.
+        alerta_serie_vieja(meta.get("LASTUPDATE"), serie.frecuencia)
 
         resumen_observaciones(fetch.inegi_parsear(payload, serie.id), serie.id)
 

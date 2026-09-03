@@ -125,17 +125,25 @@ def inegi_crudo(
     indicador: str,
     idioma: str = "es",
     entidad: str = "00",
-    serie_historica: bool = False,
-    banco: str = "BIE",
+    dato_reciente: bool = False,
+    banco: str = "BIE-BISE",
     version: str = "2.0",
 ) -> tuple[dict, str]:
     """Devuelve (json, url_sin_token) tal como lo entrega el Banco de Indicadores.
 
-    `serie_historica=False` trae la serie completa; `True` trae solo el último dato.
-    (Sí, el nombre del parámetro en la API es contraintuitivo.)
+    `dato_reciente=False` trae la serie histórica completa;
+    `True` trae únicamente la última observación.
+
+    `banco` TIENE que coincidir con el banco de origen del indicador:
+        BIE-BISE  indicadores económicos de coyuntura (INPC, IGAE, empleo...)
+        BISE      censos y encuestas (población, vivienda...)
+
+    Probado el 2026-09-02: el indicador 334452 responde con BIE-BISE y falla
+    con BIE o con BISE a secas; el 1002000001 (población) es al revés.
+    No existe un valor de `banco` que sirva para todo.
     """
     token = _token("INEGI_TOKEN")
-    historica = "true" if serie_historica else "false"
+    historica = "true" if dato_reciente else "false"
 
     url = (
         f"{INEGI_BASE}/{indicador}/{idioma}/{entidad}/{historica}"
