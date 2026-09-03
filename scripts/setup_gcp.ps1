@@ -70,6 +70,18 @@ foreach ($ds in $DATASETS) {
     else { Write-Host "  ! $ds FALLO" }
 }
 
+# Sin caducidad, explicitamente. Un dataset con `defaultTableExpirationMs`
+# le pone fecha de muerte a TODA tabla que se cree dentro, sin avisar en
+# ningun momento: la tabla simplemente desaparece meses despues.
+# `0` significa "nunca". Es idempotente y barato como seguro.
+foreach ($ds in $DATASETS) {
+    bq --project_id=$PROJECT update `
+        --default_table_expiration 0 `
+        --default_partition_expiration 0 `
+        "${PROJECT}:${ds}" 2>&1 | Out-Null
+}
+Write-Host "  = caducidad de tablas y particiones: NUNCA (explicito)"
+
 # -------------------------------------------------------- 2. Service accounts
 Titulo "2. Service accounts"
 
