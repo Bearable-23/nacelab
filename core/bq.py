@@ -28,11 +28,20 @@ from google.cloud import bigquery
 ALCANCE = ["https://www.googleapis.com/auth/cloud-platform"]
 
 
-def cliente(proyecto: str | None = None) -> bigquery.Client:
-    """Devuelve un cliente de BigQuery ya autenticado."""
+def cliente(proyecto: str | None = None, sa: str | None = None) -> bigquery.Client:
+    """Devuelve un cliente de BigQuery ya autenticado.
+
+    `sa` permite pedir una cuenta concreta ("sa-transform") en vez de la de
+    IMPERSONATE_SA. Cada paso del pipeline corre con la identidad mínima que
+    necesita: ingesta escribe en bronze, transformación escribe en gold, la
+    app solo lee. En Cloud Run se ignora: allá la cuenta va adjunta al servicio.
+    """
     proyecto = proyecto or os.environ.get("GCP_PROJECT", "").strip()
     if not proyecto:
         raise RuntimeError("Falta la variable de entorno GCP_PROJECT.")
+
+    if sa and not os.environ.get("K_SERVICE"):  # K_SERVICE solo existe en Cloud Run
+        os.environ["IMPERSONATE_SA"] = f"{sa}@{proyecto}.iam.gserviceaccount.com"
 
     # `quota_project_id` decide a qué proyecto se le factura el uso de las APIs,
     # que no es lo mismo que el proyecto al que accedes. Si no se fija, se usa
