@@ -40,23 +40,35 @@ series:
       126,014,024 en 2020. Es el ejemplo de la documentación oficial.
       No se va a mostrar en el sitio: es la prueba de humo del pipeline.
 
-  - id: inpc_por_identificar
-    nombre: Índice de precios al consumidor (falta saber si general o subyacente)
+  - id: inpc_subyacente
+    nombre: INPC subyacente (índice base 2Q julio 2018 = 100)
     fuente: inegi
     fuente_id: "334452"
     banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
-    verificado: false
+    verificado: true
     nota: >
-      RESPONDE PERO SIN IDENTIFICAR. 403 observaciones, 1993/01 a 2026/07,
-      último valor 146.0001, variación anual implícita 3.95%, actualizado
-      2026-08-24. Los datos son buenos y la frecuencia es mensual.
-      Lo que falta es saber CUÁL de los dos índices es: se sacó del
-      constructor de consultas con "Precios al Consumidor" y "Precios al
-      Consumidor Subyacente" en pantalla. Se distingue comparando contra el
-      otro: el subyacente excluye energéticos y agropecuarios, así que es
-      notoriamente menos volátil.
+      CONFIRMADO 2026-09-02. 403 observaciones, 1993/01 a 2026/07,
+      actualizado 2026-08-24.
+      Identificado contra las cifras publicadas por el INEGI para julio 2026:
+      la serie da índice 146.0001 y variación anual 3.95%. El INEGI reportó
+      subyacente 3.95% anual, y general 3.12% con índice 145.169.
+      Coincide con el subyacente y NO coincide con el general: dos vías
+      independientes apuntan al mismo lado.
+
+  # Prueba de aceptación para cuando aparezca el id del general:
+  # su valor de 2026/07 tiene que ser 145.169 y su variación anual 3.12%.
+  # Si no da eso, el id está mal por más que responda 200.
+  - id: inpc_general
+    nombre: INPC general (índice base 2Q julio 2018 = 100)
+    fuente: inegi
+    fuente_id: null
+    banco: BIE-BISE
+    frecuencia: mensual
+    unidad: indice
+    verificado: false
+    nota: Falta el id. Sacarlo del constructor de consultas.
 
   - id: igae
     nombre: Indicador Global de la Actividad Económica
