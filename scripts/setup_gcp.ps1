@@ -234,7 +234,14 @@ Titulo "7. Permitir suplantar las service accounts desde tu maquina"
 # y corre CON SUS PERMISOS REALES. Sigue sin haber llaves descargadas: el
 # token dura minutos y lo emite Google contra la identidad del usuario.
 
-$USUARIO = "jn.dataworks@gmail.com"
+# Se toma de tu configuracion de gcloud en vez de estar escrito a mano:
+# asi el script sirve para cualquiera que clone el repo, no solo para su autor.
+$USUARIO = (gcloud config get-value account 2>$null)
+if (-not $USUARIO) {
+    Write-Host "  ! No hay cuenta activa en gcloud. Corre: gcloud auth login"
+    return
+}
+Write-Host "  Usuario: $USUARIO"
 
 foreach ($c in $CUENTAS) {
     $correo = "$($c.id)@${PROJECT}.iam.gserviceaccount.com"
