@@ -1,0 +1,34 @@
+# CREDENCIALES — lo más importante de este archivo.
+#
+# .gitignore protege el repositorio; la imagen de Docker es un camino
+# completamente distinto. Sin esta exclusión, tu token del INEGI viajaría
+# dentro de la imagen publicada en Artifact Registry.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*credentials*.json
+*service-account*.json
+
+# Entorno local: pesa cientos de MB y contiene binarios de Windows que no
+# sirven en el contenedor Linux.
+.venv/
+venv/
+
+.git/
+.github/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Nada de esto lo necesita la app en tiempo de ejecución.
+scripts/
+notebooks/
+data/
+*.parquet
+*.duckdb
+
+*.md
+!README.md
