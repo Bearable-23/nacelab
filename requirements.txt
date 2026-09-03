@@ -2,3 +2,5 @@ requests
 PyYAML
 python-dotenv
 pandas
+google-cloud-bigquery
+google-auth

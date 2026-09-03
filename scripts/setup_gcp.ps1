@@ -40,6 +40,22 @@ function Titulo($texto) {
     Write-Host ("-" * 68)
 }
 
+# -------------------------------------------------------------------- 0. APIs
+Titulo "0. APIs"
+
+# Solo lo que se usa. Cada API activa es superficie de ataque.
+# iamcredentials es la que permite suplantar service accounts (paso 7).
+$APIS = @(
+    "bigquery.googleapis.com"
+    "iamcredentials.googleapis.com"
+    "secretmanager.googleapis.com"
+    "run.googleapis.com"
+    "cloudscheduler.googleapis.com"
+)
+gcloud services enable @APIS --project=$PROJECT 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) { Write-Host "  + $($APIS.Count) APIs habilitadas" }
+else { Write-Host "  ! fallo al habilitar APIs" }
+
 # ---------------------------------------------------------------- 1. Datasets
 Titulo "1. Datasets (region $LOCATION)"
 
@@ -194,3 +210,26 @@ Write-Host "Roles que le quedan (lo ideal es ninguno):"
 gcloud projects get-iam-policy $PROJECT --flatten="bindings[].members" `
     --filter="bindings.members:${COMPUTE_SA}" `
     --format="value(bindings.role)" 2>$null
+
+# ---------------------------------------------- 7. Suplantacion para local
+Titulo "7. Permitir suplantar las service accounts desde tu maquina"
+
+# El usuario es Owner del proyecto, asi que correr la ingesta con sus propias
+# credenciales funcionaria aunque los permisos de sa-ingest estuvieran mal.
+# Eso deja el diseno sin probar hasta el despliegue.
+#
+# Con serviceAccountTokenCreator, el usuario pide un token temporal de la SA
+# y corre CON SUS PERMISOS REALES. Sigue sin haber llaves descargadas: el
+# token dura minutos y lo emite Google contra la identidad del usuario.
+
+$USUARIO = "jn.dataworks@gmail.com"
+
+foreach ($c in $CUENTAS) {
+    $correo = "$($c.id)@${PROJECT}.iam.gserviceaccount.com"
+    gcloud iam service-accounts add-iam-policy-binding $correo `
+        --project=$PROJECT `
+        --member="user:${USUARIO}" `
+        --role="roles/iam.serviceAccountTokenCreator" 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Host "  + puede suplantar a $($c.id)" }
+    else { Write-Host "  ! fallo el permiso sobre $($c.id)" }
+}
