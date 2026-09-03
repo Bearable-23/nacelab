@@ -97,69 +97,53 @@ def contar(cliente: bigquery.Client) -> int:
     return list(cliente.query(q).result())[0].n
 
 
-# --------------------------------------------------------------------------- #
-#  ↓↓↓  ESTO LO ESCRIBES TÚ  ↓↓↓
-# --------------------------------------------------------------------------- #
-
 def merge_a_bronze(cliente: bigquery.Client) -> dict[str, int]:
     """Consolida staging en bronze.serie_obs de forma idempotente.
 
-    CONTEXTO
-    --------
-    Origen:  `{proyecto}.nacelab_bronze._staging_serie_obs`
-    Destino: `{proyecto}.nacelab_bronze.serie_obs`
+    Una observación se identifica de forma única por (fuente, serie_id, fecha).
+    Tres casos, y el tercero es el que casi nadie escribe:
 
-    Ambas tienen exactamente las mismas columnas:
-        fuente STRING, serie_id STRING, fecha DATE,
-        valor NUMERIC, ingested_at TIMESTAMP
+        no existe            -> INSERT
+        existe y cambió      -> UPDATE
+        existe y es igual    -> no hacer nada
 
-    Una observación queda identificada de forma única por:
-        (fuente, serie_id, fecha)
-
-    QUÉ TIENE QUE LOGRAR
-    --------------------
-    1. Si la observación NO existe en destino  -> insertarla
-    2. Si existe y el valor CAMBIÓ             -> actualizar valor e ingested_at
-    3. Si existe y el valor es el MISMO        -> no tocarla
-
-    El caso 3 es el que hace que correrlo dos veces seguidas no cambie nada.
-    Y no es solo eficiencia: si actualizas `ingested_at` en cada corrida,
-    pierdes la señal de cuándo cambió el dato de verdad. Esa columna es tu
-    única evidencia de que el INEGI revisó una cifra.
-
-    PISTA SOBRE UN CASO QUE MUERDE
-    ------------------------------
-    `valor` admite NULL. En SQL, `NULL != 5` no es TRUE: es NULL, y una
-    condición NULL no dispara el UPDATE. Piensa qué pasa si un dato pasa de
-    NULL a tener valor, o al revés. Busca cómo comparar dos valores tratando
-    los NULL como iguales entre sí.
-
-    CÓMO PROBARLO (scripts/cargar_bronze.py lo hace solo)
-    -----------------------------------------------------
-    a) Córrelo dos veces  -> el conteo de filas NO debe cambiar
-    b) Altera un valor a mano en bronze y vuelve a correr:
-           UPDATE `...serie_obs` SET valor = 1
-           WHERE serie_id = 'inpc_general' AND fecha = '2026-07-01';
-       -> debe volver a 145.169, no duplicarse
-
-    Documentación: MERGE de BigQuery en
-    cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
+    Correrlo dos veces seguidas no debe cambiar absolutamente nada.
     """
     sql = f"""
-    -- TODO: escribe aquí el MERGE.
-    --
-    -- Esqueleto:
-    --   MERGE INTO `{ref(cliente, TABLA)}` AS t
-    --   USING `{ref(cliente, STAGING)}` AS s
-    --   ON  ...
-    --   WHEN MATCHED AND ... THEN UPDATE SET ...
-    --   WHEN NOT MATCHED THEN INSERT (...) VALUES (...)
-    """
+    MERGE INTO `{ref(cliente, TABLA)}` AS t
+    USING `{ref(cliente, STAGING)}` AS s
 
-    if "TODO" in sql:
-        raise NotImplementedError(
-            "Falta escribir el MERGE en core/load.py -> merge_a_bronze()"
-        )
+      -- La clave de conciliación. Si esto queda incompleto, el MERGE deja de
+      -- encontrar la fila existente y empieza a insertar duplicados en vez de
+      -- actualizar. Es exactamente el modo de falla que hay que evitar.
+      ON  t.fuente   = s.fuente
+      AND t.serie_id = s.serie_id
+      AND t.fecha    = s.fecha
+
+    -- Solo se toca la fila si el valor REALMENTE cambió.
+    --
+    -- `IS DISTINCT FROM` compara tratando los NULL como un valor más:
+    --     NULL IS DISTINCT FROM 5      -> true   (cambió)
+    --     NULL IS DISTINCT FROM NULL   -> false  (no cambió)
+    --        5 IS DISTINCT FROM 5      -> false  (no cambió)
+    --
+    -- Con el `!=` de siempre, `NULL != 5` da NULL, y una condición NULL no
+    -- dispara el UPDATE: un dato que pasa de nulo a tener valor se quedaría
+    -- desactualizado para siempre, sin ningún error visible.
+    WHEN MATCHED AND t.valor IS DISTINCT FROM s.valor THEN
+      UPDATE SET
+        valor       = s.valor,
+        ingested_at = s.ingested_at
+
+    WHEN NOT MATCHED THEN
+      INSERT (fuente, serie_id, fecha, valor, ingested_at)
+      VALUES (s.fuente, s.serie_id, s.fecha, s.valor, s.ingested_at)
+
+    -- Deliberadamente NO se usa `WHEN NOT MATCHED BY SOURCE THEN DELETE`.
+    -- Eso borraría de bronze todo lo que no venga en la carga actual: si un
+    -- día quitas una serie del catálogo o la API responde a medias, perderías
+    -- historia que ya no se puede recuperar. Bronze solo crece.
+    """
 
     job = cliente.query(sql)
     job.result()
