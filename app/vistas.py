@@ -244,6 +244,32 @@ def comparar(meta: dict, filtros: Filtros):
     with st.container(border=True):
         st.altair_chart(grafica, use_container_width=True)
 
+    # ------------------------------------------------- panel descargable --
+    # La gráfica sirve para mirar; para modelar hace falta la rejilla. Aquí
+    # es donde alguien que quiere correr una regresión se lleva los datos ya
+    # alineados a mes, en vez de reconstruir el alineamiento por su cuenta y
+    # equivocarse en el camino.
+    st.subheader("Llevarte los datos")
+    panel = datos.panel_mensual()
+    if panel.empty:
+        st.caption("El panel mensual todavía no está construido.")
+        return
+
+    st.caption(
+        "Todas las series alineadas a mes, una columna por indicador. Las "
+        "celdas vacías son huecos reales: no se rellenan, porque interpolar "
+        "es una decisión de quien analiza y debe tomarse a la vista. La "
+        "columna `n_obs` de `gold_panel_mensual` dice con cuántas "
+        "observaciones se armó cada mes."
+    )
+    st.dataframe(panel.tail(12), hide_index=True, use_container_width=True)
+    st.download_button(
+        "Descargar el panel mensual completo (CSV)",
+        panel.to_csv(index=False).encode("utf-8"),
+        file_name="nacelab_panel_mensual.csv",
+        mime="text/csv",
+    )
+
 
 def metodologia():
     """Cómo se produce cada número. El cuarto pilar, como página propia."""

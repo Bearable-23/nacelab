@@ -32,13 +32,13 @@ def linea(t=""):
 
 
 def main() -> int:
-    linea("1. Construyendo gold.indicador")
+    linea("1. Construyendo gold")
     cliente = bq.cliente(PROYECTO, sa="sa-transform")
     print(f"  Identidad: {bq.identidad()}")
 
-    r = transform.construir(cliente, "gold_indicador")
-    print(f"  {r['tabla']}")
-    print(f"  {r['filas']} filas")
+    for modelo in ("gold_indicador", "gold_panel_mensual"):
+        r = transform.construir(cliente, modelo)
+        print(f"  {r['tabla']:<50} {r['filas']:>6} filas")
 
     linea("2. Muestra: INPC general, últimos 6 meses")
     q = f"""

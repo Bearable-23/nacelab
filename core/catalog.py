@@ -25,6 +25,9 @@ class Serie:
     frecuencia: str
     unidad: str
     tema: str = "otros"  # id de un tema; agrupa la serie en el tablero
+    # Cómo colapsar a mensual: fin_de_mes | promedio | suma. Solo tiene efecto
+    # en series más finas que mensual. None = usar el default del catálogo.
+    agregacion: str | None = None
     banco: str = "BISE"  # solo aplica a INEGI: BISE | BIE (BIE parece deprecado)
     verificado: bool = False
     nota: str = ""
@@ -59,6 +62,33 @@ def cargar_catalogo(ruta: Path = RUTA_CATALOGO) -> tuple[list[Serie], dict]:
     series = [Serie(**s) for s in crudo["series"]]
     defaults = crudo.get("inegi_defaults", {})
     return series, defaults
+
+
+AGREGACIONES = {"fin_de_mes", "promedio", "suma"}
+
+
+def cargar_agregacion_default(ruta: Path = RUTA_CATALOGO) -> str:
+    """Regla de colapso a mensual para las series que no declaran una."""
+    with open(ruta, encoding="utf-8") as f:
+        crudo = yaml.safe_load(f)
+    return crudo.get("agregacion_por_defecto", "fin_de_mes")
+
+
+def agregacion_de(serie: Serie, por_defecto: str) -> str:
+    """Cómo se colapsa esta serie a mensual, validando el valor.
+
+    Un `agregacion` mal escrito en el YAML no debe convertirse en un método
+    silencioso. En el SQL, un método desconocido caería en el ELSE y usaría
+    fin de mes sin avisar: la regresión saldría con otros números y nadie
+    sabría por qué.
+    """
+    valor = serie.agregacion or por_defecto
+    if valor not in AGREGACIONES:
+        raise ValueError(
+            f"La serie '{serie.id}' declara agregacion '{valor}', que no existe. "
+            f"Válidas: {', '.join(sorted(AGREGACIONES))}"
+        )
+    return valor
 
 
 def cargar_tolerancias(ruta: Path = RUTA_CATALOGO) -> dict[str, int]:

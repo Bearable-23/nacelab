@@ -61,6 +61,11 @@ series:
     tema: tipo_cambio
     frecuencia: diaria
     unidad: mxn_por_usd
+    # Promedio y no cierre de mes: la primera pregunta que va a responder esta
+    # serie es el traspaso del tipo de cambio a precios, y ahí lo estándar es
+    # el promedio mensual — los precios se forman a lo largo del mes. Si algún
+    # día interesa el cierre, se cambia esta línea y se reconstruye el panel.
+    agregacion: promedio
     verificado: false
     nota: >
       Documentado como "Pesos por Dólar. FIX" en el SIE. Sin probar todavía:
@@ -183,6 +188,33 @@ tolerancia_dias:
   trimestral: 0
   anual: 0
   irregular: 0
+
+
+# ---------------------------------------------------------------------------
+# CÓMO SE COLAPSA CADA SERIE A FRECUENCIA MENSUAL
+# ---------------------------------------------------------------------------
+# `gold_panel_mensual` alinea todo a meses para poder cruzar series. Pasar de
+# diaria a mensual NO tiene una respuesta única, y elegir mal cambia el
+# resultado de una regresión:
+#
+#   fin_de_mes  el último dato del mes. Correcto para un STOCK: un tipo de
+#               cambio o un saldo son "cuánto vale hoy", y promediarlos
+#               inventa un valor que nunca existió.
+#   promedio    la media del mes. Correcto cuando el mes entero es la unidad
+#               de análisis. Es lo habitual en los estudios de traspaso del
+#               tipo de cambio a precios, porque los precios se forman a lo
+#               largo del mes y no el día 30.
+#   suma        el total del mes. Correcto para un FLUJO: remesas, ventas,
+#               exportaciones. Promediar un flujo no significa nada.
+#
+# Solo tiene efecto en series MÁS finas que mensual. En una serie mensual las
+# tres reglas dan el mismo número, y se declara igual para que el día que
+# llegue su versión diaria la decisión ya esté tomada y escrita.
+#
+# El panel guarda `n_obs`: cuántas observaciones entraron en cada mes. Un mes
+# armado con 22 días hábiles y uno armado con 3 no valen lo mismo, y quien
+# haga econometría con esto tiene que poder verlo.
+agregacion_por_defecto: fin_de_mes
 
 
 inegi_defaults:

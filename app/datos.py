@@ -24,6 +24,7 @@ from core import bq  # noqa: E402
 from core.catalog import agrupar_por_tema, cargar_catalogo, cargar_temas  # noqa: E402
 
 TABLA_GOLD = "nacelab_gold.gold_indicador"
+TABLA_PANEL = "nacelab_gold.gold_panel_mensual"
 
 
 def proyecto() -> str:
@@ -125,6 +126,34 @@ def ultimos() -> pd.DataFrame:
         QUALIFY ROW_NUMBER() OVER (PARTITION BY serie_id ORDER BY fecha DESC) = 1
     """
     return _cliente().query(sql).to_dataframe()
+
+
+@st.cache_data(ttl=3600)
+def panel_mensual() -> pd.DataFrame:
+    """El panel alineado a mes, ya pivotado a ancho: una columna por serie.
+
+    gold lo guarda largo porque un PIVOT en BigQuery exige la lista de
+    columnas escrita a mano, y eso obligaría a editar el SQL cada vez que se
+    agrega una serie al catálogo. El pivote es barato y se hace aquí.
+
+    Formato ancho porque es lo que una regresión necesita: `mes` como índice y
+    una columna por variable. Los huecos quedan como NaN y no se rellenan —
+    una serie decenal deja casi todos los meses vacíos, y eso es información,
+    no un defecto que haya que tapar.
+    """
+    sql = f"""
+        SELECT mes, serie_id, valor
+        FROM `{proyecto()}.{TABLA_PANEL}`
+        ORDER BY mes
+    """
+    largo = _cliente().query(sql).to_dataframe()
+    if largo.empty:
+        return largo
+    return (
+        largo.pivot(index="mes", columns="serie_id", values="valor")
+        .reset_index()
+        .rename_axis(None, axis=1)
+    )
 
 
 @st.cache_data(ttl=3600)

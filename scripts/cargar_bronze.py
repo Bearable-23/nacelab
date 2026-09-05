@@ -22,7 +22,12 @@ import os  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from core import bq, fetch, load  # noqa: E402
-from core.catalog import cargar_catalogo, cargar_tolerancias  # noqa: E402
+from core.catalog import (  # noqa: E402
+    agregacion_de,
+    cargar_agregacion_default,
+    cargar_catalogo,
+    cargar_tolerancias,
+)
 
 load_dotenv()
 
@@ -106,7 +111,9 @@ def main() -> int:
     # mañana una pasa a verificada, su configuración ya está en BigQuery y no
     # hay una corrida en la que gold la trate con la regla equivocada.
     todas, _ = cargar_catalogo()
-    n_dim = load.sincronizar_dim(cliente, todas, cargar_tolerancias())
+    por_defecto = cargar_agregacion_default()
+    agregaciones = {s.id: agregacion_de(s, por_defecto) for s in todas}
+    n_dim = load.sincronizar_dim(cliente, todas, cargar_tolerancias(), agregaciones)
     print(f"  serie_dim sincronizada: {n_dim} series")
 
     if args.simular_revision:
@@ -129,20 +136,24 @@ def main() -> int:
     despues = load.contar(cliente)
 
     print(f"  filas antes:     {antes:>6}")
-    print(f"  filas afectadas: {resultado['filas_afectadas']:>6}")
     print(f"  filas después:   {despues:>6}")
     print(f"  filas nuevas:    {despues - antes:>6}")
+    print(f"  revisiones archivadas: {resultado['revisiones_archivadas']:>6}")
+    if resultado["revisiones_archivadas"]:
+        print("    (valores que la fuente cambió; el anterior quedó guardado")
+        print("     en serie_obs_historial, no se perdió)")
 
     linea("IDEMPOTENCIA")
     if antes == 0:
         print("  Primera carga. Corre el script otra vez:")
         print("  el conteo NO debe cambiar y las filas afectadas deben ser 0.")
-    elif despues == antes and resultado["filas_afectadas"] == 0:
+    elif despues == antes and resultado["revisiones_archivadas"] == 0:
         print("  ✓ Nada cambió. El MERGE es idempotente.")
     elif despues == antes:
-        print(f"  ✓ Sin filas nuevas, pero se actualizaron "
-              f"{resultado['filas_afectadas']}.")
+        print(f"  ✓ Sin filas nuevas, pero cambiaron "
+              f"{resultado['revisiones_archivadas']} valores.")
         print("    Correcto si el INEGI revisó datos; sospechoso si no.")
+        print("    Qué cambió exactamente: consulta serie_obs_historial.")
     else:
         print(f"  ✗ Aparecieron {despues - antes} filas de más.")
         print("    El MERGE está insertando en vez de actualizar: revisa el ON.")

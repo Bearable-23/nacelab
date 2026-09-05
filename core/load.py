@@ -20,6 +20,7 @@ DATASET = "nacelab_bronze"
 TABLA = "serie_obs"
 STAGING = "_staging_serie_obs"
 DIM = "serie_dim"
+HISTORIAL = "serie_obs_historial"
 
 ESQUEMA = [
     bigquery.SchemaField("fuente", "STRING", mode="REQUIRED"),
@@ -40,10 +41,38 @@ ESQUEMA_DIM = [
     bigquery.SchemaField("serie_id", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("frecuencia", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("tolerancia_dias", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("agregacion", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("fuente", "STRING", mode="REQUIRED"),
     bigquery.SchemaField("unidad", "STRING"),
     bigquery.SchemaField("tema", "STRING"),
     bigquery.SchemaField("sincronizado_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+
+# Las revisiones que el MERGE va a pisar.
+#
+# El INEGI revisa datos históricos: el IGAE de hace tres meses cambia de valor.
+# El MERGE hace `UPDATE SET valor = s.valor` y el valor anterior desaparece.
+# Para un tablero da igual —quieres la cifra vigente— pero para evaluar
+# modelos es fatal: un pronóstico solo se juzga honestamente contra los datos
+# que existían CUANDO se hizo, no contra la serie ya revisada. Un modelo
+# evaluado con cifras revisadas hace trampa sin saberlo.
+#
+# Es el problema de datos en tiempo real (Croushore y Stark). Se resuelve
+# guardando la versión anterior ANTES de pisarla; la historia que no se guarda
+# hoy no se recupera nunca.
+#
+# Tabla aparte y no columnas de vigencia en serie_obs, a propósito: así
+# serie_obs conserva exactamente su forma y su contrato —una fila por
+# observación vigente— y nada de lo que ya lee de ella tiene que cambiar.
+ESQUEMA_HISTORIAL = [
+    bigquery.SchemaField("fuente", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("serie_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("fecha", "DATE", mode="REQUIRED"),
+    bigquery.SchemaField("valor_anterior", "NUMERIC"),
+    bigquery.SchemaField("valor_nuevo", "NUMERIC"),
+    bigquery.SchemaField("ingested_at_anterior", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("reemplazado_at", "TIMESTAMP", mode="REQUIRED"),
 ]
 
 
@@ -65,8 +94,13 @@ def asegurar_tabla(cliente: bigquery.Client) -> None:
     tabla.clustering_fields = ["serie_id", "fecha"]
     cliente.create_table(tabla, exists_ok=True)
 
+    hist = bigquery.Table(ref(cliente, HISTORIAL), schema=ESQUEMA_HISTORIAL)
+    hist.clustering_fields = ["serie_id", "fecha"]
+    cliente.create_table(hist, exists_ok=True)
 
-def sincronizar_dim(cliente: bigquery.Client, series, tolerancias: dict) -> int:
+
+def sincronizar_dim(cliente: bigquery.Client, series, tolerancias: dict,
+                    agregaciones: dict) -> int:
     """Proyecta el catálogo a bronze.serie_dim.
 
     Se reemplaza ENTERA en cada corrida, al revés que `serie_obs`, que solo
@@ -85,6 +119,9 @@ def sincronizar_dim(cliente: bigquery.Client, series, tolerancias: dict) -> int:
             "frecuencia": s.frecuencia,
             # Frecuencia sin tolerancia declarada = 0, la regla estricta.
             "tolerancia_dias": int(tolerancias.get(s.frecuencia, 0)),
+            # Ya viene validado contra la lista de métodos permitidos: un
+            # valor inventado revienta en Python, no se cuela al SQL.
+            "agregacion": agregaciones[s.id],
             "fuente": s.fuente,
             "unidad": s.unidad,
             "tema": s.tema,
@@ -166,7 +203,35 @@ def merge_a_bronze(cliente: bigquery.Client) -> dict[str, int]:
 
     Correrlo dos veces seguidas no debe cambiar absolutamente nada.
     """
+    # Transacción, y no dos consultas seguidas. Si el archivado ocurriera y el
+    # MERGE fallara, el historial diría que un valor fue reemplazado cuando
+    # sigue vigente: una bitácora que miente es peor que no tenerla. BEGIN /
+    # COMMIT hace que las dos cosas pasen juntas o ninguna.
     sql = f"""
+    BEGIN TRANSACTION;
+
+    -- Guardar lo que el MERGE está a punto de pisar. Va ANTES del MERGE, que
+    -- es el único momento en que las dos versiones coexisten: después, la
+    -- anterior ya no existe en ningún lado.
+    --
+    -- La condición es la MISMA que dispara el UPDATE de abajo. Si alguna de
+    -- las dos cambia sin la otra, el historial deja de reflejar la realidad.
+    INSERT INTO `{ref(cliente, HISTORIAL)}`
+      (fuente, serie_id, fecha, valor_anterior, valor_nuevo,
+       ingested_at_anterior, reemplazado_at)
+    SELECT
+      t.fuente, t.serie_id, t.fecha,
+      t.valor  AS valor_anterior,
+      s.valor  AS valor_nuevo,
+      t.ingested_at AS ingested_at_anterior,
+      CURRENT_TIMESTAMP() AS reemplazado_at
+    FROM `{ref(cliente, TABLA)}` AS t
+    JOIN `{ref(cliente, STAGING)}` AS s
+      ON  t.fuente   = s.fuente
+      AND t.serie_id = s.serie_id
+      AND t.fecha    = s.fecha
+    WHERE t.valor IS DISTINCT FROM s.valor;
+
     MERGE INTO `{ref(cliente, TABLA)}` AS t
     USING `{ref(cliente, STAGING)}` AS s
 
@@ -200,8 +265,31 @@ def merge_a_bronze(cliente: bigquery.Client) -> dict[str, int]:
     -- Eso borraría de bronze todo lo que no venga en la carga actual: si un
     -- día quitas una serie del catálogo o la API responde a medias, perderías
     -- historia que ya no se puede recuperar. Bronze solo crece.
+    ;
+
+    COMMIT TRANSACTION;
     """
 
+    # En un script multi-sentencia, num_dml_affected_rows del job padre no
+    # corresponde al MERGE, así que la métrica que importa —cuántas revisiones
+    # hubo— se mide contando el historial antes y después.
+    #
+    # El primer intento fue "filas del historial de los últimos 5 minutos", y
+    # daba un falso positivo: al correr el script dos veces seguidas, la
+    # segunda contaba el archivado de la primera y decía que había cambiado un
+    # valor cuando no había cambiado nada. Justo el resultado que la prueba de
+    # idempotencia existe para detectar, producido por el medidor y no por lo
+    # medido. Un conteo antes/después no depende del reloj.
+    def _n_historial() -> int:
+        return list(cliente.query(
+            f"SELECT COUNT(*) AS n FROM `{ref(cliente, HISTORIAL)}`"
+        ).result())[0].n
+
+    hist_antes = _n_historial()
     job = cliente.query(sql)
     job.result()
-    return {"filas_afectadas": job.num_dml_affected_rows or 0}
+
+    return {
+        "filas_afectadas": job.num_dml_affected_rows or 0,
+        "revisiones_archivadas": _n_historial() - hist_antes,
+    }
