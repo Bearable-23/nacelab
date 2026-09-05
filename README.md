@@ -5,7 +5,11 @@ Banxico, actualizados automáticamente, con el código que los obtiene a la vist
 
 > **Principio:** todo resultado debe poder seguirse hasta su origen.
 
-**Estado:** semana 1. Verificando ids de series contra las APIs. Nada en producción.
+**En línea:** https://nacelab-314189642979.us-central1.run.app
+
+**Estado:** pipeline completo funcionando. Tres series verificadas. La ingesta todavía
+se corre a mano — automatizarla con Cloud Scheduler es lo siguiente, así que los datos
+se actualizan cuando alguien ejecuta el job.
 
 ---
 
@@ -43,10 +47,25 @@ python scripts/probar_series.py --crudo    # ver el JSON completo
 ## Estructura
 
 ```
-catalog/series.yml     El catálogo. Única fuente de verdad sobre qué series existen
-core/catalog.py        Lectura del catálogo
-core/fetch.py          Descarga desde INEGI y Banxico
-scripts/probar_series.py   Verifica ids y muestra qué devuelve cada API
+catalog/series.yml   El catálogo. Única fuente de verdad sobre qué series existen
+core/                fetch (APIs) · load (MERGE a bronze) · transform (gold) · bq (auth)
+sql/                 El SQL de gold, fuera de Python: se puede correr a mano
+app/                 Streamlit. Lee gold, no calcula
+scripts/             setup_gcp · cargar_bronze · construir_gold · probar_*
+```
+
+Flujo completo:
+
+```
+API  →  bronze.serie_obs  →  gold.gold_indicador  →  Streamlit
+        MERGE idempotente    variaciones y percentil    solo lee
+        sa-ingest            sa-transform               sa-app
+```
+
+```bash
+python scripts/cargar_bronze.py     # API -> bronze
+python scripts/construir_gold.py    # bronze -> gold
+streamlit run app/main.py           # ver el sitio
 ```
 
 Regla: **si algo calcula, va en `core/`. Si algo dibuja, va en la app.**
