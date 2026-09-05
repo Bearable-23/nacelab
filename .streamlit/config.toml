@@ -1,0 +1,25 @@
+# Tema del sitio.
+#
+# Sin este archivo, Streamlit sigue la preferencia del sistema operativo de
+# CADA visitante: tú lo veías oscuro porque tu equipo está en oscuro, pero
+# alguien en modo claro veía un nacelab blanco. La apariencia de un sitio
+# público no puede depender de la configuración de quien lo abre.
+#
+# La paleta es oscura y de bajo contraste entre fondo y tarjeta, para que las
+# tarjetas se lean como bloques sin necesidad de bordes fuertes. El acento es
+# el mismo azul que usa Altair por defecto, así las gráficas no pelean con la
+# interfaz.
+
+[theme]
+base = "dark"
+backgroundColor = "#12161C"
+secondaryBackgroundColor = "#1A1F27"
+textColor = "#E6EAF0"
+primaryColor = "#4FC3F7"
+
+[server]
+# El sitio no recibe archivos. Sin esto, Streamlit reserva 200 MB por subida.
+maxUploadSize = 5
+
+[browser]
+gatherUsageStats = false

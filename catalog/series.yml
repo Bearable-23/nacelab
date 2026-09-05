@@ -12,6 +12,45 @@
 #
 # Para probar:  python scripts/probar_series.py
 
+
+# ---------------------------------------------------------------------------
+# TEMAS — la estructura del sitio, no solo etiquetas
+# ---------------------------------------------------------------------------
+# El tablero se dibuja recorriendo esta lista, en este orden. Un tema sin
+# series verificadas no se dibuja, así que agregar un indicador al catálogo
+# lo hace aparecer en su sección sin tocar una línea de la app.
+#
+# `variacion: true` significa que lo interesante de esas series es cómo
+# CAMBIAN, no su nivel: la tarjeta y la gráfica muestran la variación anual y
+# el eje se ancla en cero, porque ahí el cero sí significa algo. En un índice
+# de nivel (población, IGAE) anclar en cero aplasta la serie contra el techo.
+#
+# `referencia` dibuja una línea punteada horizontal. Solo tiene sentido si
+# existe un objetivo declarado por alguien: el 3% es la meta de Banxico, no un
+# número que hayamos elegido nosotros.
+temas:
+  - id: precios
+    nombre: Precios
+    descripcion: Qué tan rápido pierde poder de compra el peso.
+    variacion: true
+    referencia: 3.0
+
+  - id: actividad
+    nombre: Actividad económica
+    descripcion: Qué tanto se está produciendo.
+    variacion: false
+
+  - id: tipo_cambio
+    nombre: Tipo de cambio
+    descripcion: Cuántos pesos cuesta un dólar.
+    variacion: false
+
+  - id: demografia
+    nombre: Demografía
+    descripcion: Cuántos somos. Cambia despacio y por eso da escala a lo demás.
+    variacion: false
+
+
 series:
 
   # ---------------------------------------------------------------- BANXICO --
@@ -19,6 +58,7 @@ series:
     nombre: Tipo de cambio FIX (pesos por dólar)
     fuente: banxico
     fuente_id: SF43718
+    tema: tipo_cambio
     frecuencia: diaria
     unidad: mxn_por_usd
     verificado: false
@@ -31,6 +71,7 @@ series:
     nombre: Población total de México
     fuente: inegi
     fuente_id: "1002000001"
+    tema: demografia
     banco: BISE
     frecuencia: irregular
     unidad: personas
@@ -44,6 +85,7 @@ series:
     nombre: INPC subyacente (índice base 2Q julio 2018 = 100)
     fuente: inegi
     fuente_id: "334452"
+    tema: precios
     banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
@@ -61,6 +103,7 @@ series:
     nombre: INPC general (índice base 2Q julio 2018 = 100)
     fuente: inegi
     fuente_id: "334360"
+    tema: precios
     banco: BIE-BISE
     frecuencia: mensual
     unidad: indice
@@ -77,6 +120,7 @@ series:
     nombre: Indicador Global de la Actividad Económica
     fuente: inegi
     fuente_id: null
+    tema: actividad
     banco: BIE-BISE
     frecuencia: mensual
     unidad: indice

@@ -14,6 +14,10 @@ COPY core/    ./core/
 COPY app/     ./app/
 COPY catalog/ ./catalog/
 COPY sql/     ./sql/
+# El tema. Sin esta linea el contenedor no lo lleva, y el sitio publicado
+# vuelve a seguir la preferencia del sistema operativo de cada visitante:
+# se veria distinto en produccion que en local, y sin ningun error visible.
+COPY .streamlit/ ./.streamlit/
 
 ENV GCP_PROJECT=nacelab-prod
 ENV PYTHONUNBUFFERED=1
