@@ -22,7 +22,7 @@ import os  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
 from core import bq, fetch, load  # noqa: E402
-from core.catalog import cargar_catalogo  # noqa: E402
+from core.catalog import cargar_catalogo, cargar_tolerancias  # noqa: E402
 
 load_dotenv()
 
@@ -101,6 +101,13 @@ def main() -> int:
     print(f"  Identidad: {bq.identidad()}")
 
     load.asegurar_tabla(cliente)
+
+    # La dim se sincroniza con TODAS las series, no solo las verificadas: si
+    # mañana una pasa a verificada, su configuración ya está en BigQuery y no
+    # hay una corrida en la que gold la trate con la regla equivocada.
+    todas, _ = cargar_catalogo()
+    n_dim = load.sincronizar_dim(cliente, todas, cargar_tolerancias())
+    print(f"  serie_dim sincronizada: {n_dim} series")
 
     if args.simular_revision:
         linea("Simulando una revisión del INEGI")

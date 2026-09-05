@@ -19,6 +19,7 @@ from core.fetch import Observacion
 DATASET = "nacelab_bronze"
 TABLA = "serie_obs"
 STAGING = "_staging_serie_obs"
+DIM = "serie_dim"
 
 ESQUEMA = [
     bigquery.SchemaField("fuente", "STRING", mode="REQUIRED"),
@@ -26,6 +27,23 @@ ESQUEMA = [
     bigquery.SchemaField("fecha", "DATE", mode="REQUIRED"),
     bigquery.SchemaField("valor", "NUMERIC"),
     bigquery.SchemaField("ingested_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+# El catálogo, proyectado a BigQuery.
+#
+# Existe porque gold necesita saber la frecuencia de cada serie para decidir
+# cómo buscar la observación de referencia, y `serie_obs` no la tiene. La
+# alternativa era inferirla de los datos, pero este proyecto declara y no
+# adivina — y la otra alternativa, inyectar la lista en el SQL desde Python,
+# rompía que `sql/gold_indicador.sql` se pueda abrir y correr a mano.
+ESQUEMA_DIM = [
+    bigquery.SchemaField("serie_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("frecuencia", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("tolerancia_dias", "INT64", mode="REQUIRED"),
+    bigquery.SchemaField("fuente", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("unidad", "STRING"),
+    bigquery.SchemaField("tema", "STRING"),
+    bigquery.SchemaField("sincronizado_at", "TIMESTAMP", mode="REQUIRED"),
 ]
 
 
@@ -46,6 +64,45 @@ def asegurar_tabla(cliente: bigquery.Client) -> None:
     tabla = bigquery.Table(ref(cliente, TABLA), schema=ESQUEMA)
     tabla.clustering_fields = ["serie_id", "fecha"]
     cliente.create_table(tabla, exists_ok=True)
+
+
+def sincronizar_dim(cliente: bigquery.Client, series, tolerancias: dict) -> int:
+    """Proyecta el catálogo a bronze.serie_dim.
+
+    Se reemplaza ENTERA en cada corrida, al revés que `serie_obs`, que solo
+    crece. No es una incoherencia: son cosas distintas. `serie_obs` guarda
+    observaciones, que son hechos y no se borran. `serie_dim` es una copia del
+    catálogo, y si una serie sale del YAML tiene que salir de aquí — si no,
+    gold seguiría leyendo la configuración de algo que ya no existe.
+
+    La verdad sigue estando en catalog/series.yml. Esta tabla es un reflejo,
+    nunca una segunda fuente que se pueda editar por su cuenta.
+    """
+    ahora = datetime.now(timezone.utc).isoformat()
+    filas = [
+        {
+            "serie_id": s.id,
+            "frecuencia": s.frecuencia,
+            # Frecuencia sin tolerancia declarada = 0, la regla estricta.
+            "tolerancia_dias": int(tolerancias.get(s.frecuencia, 0)),
+            "fuente": s.fuente,
+            "unidad": s.unidad,
+            "tema": s.tema,
+            "sincronizado_at": ahora,
+        }
+        for s in series
+    ]
+
+    job = cliente.load_table_from_json(
+        filas,
+        ref(cliente, DIM),
+        job_config=bigquery.LoadJobConfig(
+            schema=ESQUEMA_DIM,
+            write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        ),
+    )
+    job.result()
+    return len(filas)
 
 
 def cargar_staging(

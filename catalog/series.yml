@@ -153,6 +153,38 @@ series:
 # LASTUPDATE antes de construir encima.
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# TOLERANCIA PARA BUSCAR LA OBSERVACIÓN DE REFERENCIA
+# ---------------------------------------------------------------------------
+# Para calcular una variación mensual hay que comparar contra el dato de hace
+# un mes. gold busca la fecha EXACTA, que es lo correcto casi siempre: si
+# falta el dato, el resultado es nulo y un hueco honesto vale más que un
+# número inventado.
+#
+# Pero una serie hábil-diaria como el tipo de cambio no cotiza sábados,
+# domingos ni días festivos. La fecha de "hace exactamente un mes" cae en fin
+# de semana unas 2 de cada 7 veces, así que la regla exacta dejaría alrededor
+# de un 30% de la serie sin variación, sin que nada esté mal.
+#
+# `tolerancia_dias` es cuántos días hacia ATRÁS se acepta retroceder para
+# encontrar la observación de referencia. Nunca hacia adelante: comparar
+# contra un dato posterior al objetivo sería mirar el futuro.
+#
+#   0 = solo la fecha exacta (el comportamiento de siempre)
+#   7 = cubre un fin de semana largo y los puentes
+#
+# gold registra QUÉ fecha usó realmente en `fecha_ref_mensual` y
+# `fecha_ref_anual`. Una comparación aproximada que no dice contra qué se
+# aproximó no es auditable.
+tolerancia_dias:
+  diaria: 7
+  quincenal: 0
+  mensual: 0
+  trimestral: 0
+  anual: 0
+  irregular: 0
+
+
 inegi_defaults:
   idioma: es              # es | en
   entidad: "00"           # 00 nacional | 99 por entidad | 999 por municipio

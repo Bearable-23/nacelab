@@ -61,6 +61,18 @@ def cargar_catalogo(ruta: Path = RUTA_CATALOGO) -> tuple[list[Serie], dict]:
     return series, defaults
 
 
+def cargar_tolerancias(ruta: Path = RUTA_CATALOGO) -> dict[str, int]:
+    """Días que se puede retroceder para hallar la observación de referencia.
+
+    Mapea frecuencia -> días. Lo que no esté declarado vale 0, es decir, fecha
+    exacta: el default seguro es el estricto, no el permisivo. Una frecuencia
+    nueva que nadie configuró se comporta como siempre se comportó todo.
+    """
+    with open(ruta, encoding="utf-8") as f:
+        crudo = yaml.safe_load(f)
+    return crudo.get("tolerancia_dias", {}) or {}
+
+
 def cargar_temas(ruta: Path = RUTA_CATALOGO) -> list[Tema]:
     """Devuelve los temas en el orden en que aparecen en el catálogo."""
     with open(ruta, encoding="utf-8") as f:

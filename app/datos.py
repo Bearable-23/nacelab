@@ -104,7 +104,8 @@ def serie(serie_id: str) -> pd.DataFrame:
     from google.cloud import bigquery
 
     sql = f"""
-        SELECT fecha, valor, var_mensual, var_anual, percentil_var_anual
+        SELECT fecha, valor, var_mensual, var_anual, percentil_var_anual,
+               fecha_ref_mensual, fecha_ref_anual
         FROM `{proyecto()}.{TABLA_GOLD}`
         WHERE serie_id = @serie_id
         ORDER BY fecha

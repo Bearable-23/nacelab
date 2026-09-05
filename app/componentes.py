@@ -168,6 +168,20 @@ def panel_serie(df: pd.DataFrame, meta_serie: dict):
                 interpretacion.contexto_historico(ultimo.percentil_var_anual, len(df))
             )
         st.caption(interpretacion.direccion(ultimo.var_mensual))
+
+        # Contra qué fecha se comparó, cuando NO es la de hace exactamente un
+        # mes. Pasa en las series hábil-diarias: si el objetivo cayó en sábado
+        # se retrocede al último día con cotización. Solo se dice cuando hay
+        # algo que decir; repetir la fecha obvia en toda serie mensual sería
+        # ruido. Sin esto, la tolerancia sería una aproximación silenciosa.
+        ref = getattr(ultimo, "fecha_ref_mensual", None)
+        if ref is not None and not pd.isna(ref):
+            exacta = pd.Timestamp(ultimo.fecha) - pd.DateOffset(months=1)
+            if pd.Timestamp(ref).date() != exacta.date():
+                st.caption(
+                    f"La variación mensual se midió contra el `{ref}`, "
+                    f"el dato disponible más cercano a hace un mes."
+                )
         st.markdown(
             f"Fuente: **{meta_serie['fuente'].upper()}** · "
             f"frecuencia {meta_serie['frecuencia']}"
