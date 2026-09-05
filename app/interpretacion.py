@@ -16,9 +16,28 @@ OBJETIVO_BANXICO = 3.0
 BANDA_BANXICO = 1.0
 
 
+def sin_dato(x: float | None) -> bool:
+    """¿Este valor es un hueco?
+
+    Un hueco llega de DOS formas distintas y hay que reconocer las dos.
+    BigQuery devuelve NULL, pero en qué se convierte depende del TIPO de la
+    columna: una columna de objetos da `None`, una FLOAT64 da `NaN`. Desde
+    que gold sirve FLOAT64 (ver el CAST en gold_indicador.sql), lo que llega
+    aquí es NaN.
+
+    La diferencia no es académica: `NaN is not None` es True, así que un
+    `if x is not None` deja pasar el hueco y la página acaba imprimiendo
+    "nan%". Justamente lo que pasó al castear gold a FLOAT64.
+
+    `x != x` detecta NaN sin depender de pandas ni de numpy: NaN es el único
+    valor que no es igual a sí mismo.
+    """
+    return x is None or x != x
+
+
 def semaforo_inflacion(var_anual: float | None) -> tuple[str, str]:
     """Devuelve (emoji, frase) para una variación anual de precios."""
-    if var_anual is None:
+    if sin_dato(var_anual):
         return "⚪", "Sin dato comparable de hace un año."
 
     piso = OBJETIVO_BANXICO - BANDA_BANXICO
@@ -43,7 +62,7 @@ def semaforo_inflacion(var_anual: float | None) -> tuple[str, str]:
 
 def contexto_historico(percentil: float | None, n_obs: int) -> str:
     """Ubica el dato dentro de la historia de la propia serie."""
-    if percentil is None:
+    if sin_dato(percentil):
         return ""
     pct = percentil * 100
     return (
@@ -54,7 +73,7 @@ def contexto_historico(percentil: float | None, n_obs: int) -> str:
 
 
 def direccion(var_mensual: float | None) -> str:
-    if var_mensual is None:
+    if sin_dato(var_mensual):
         return ""
     if abs(var_mensual) < 0.005:
         return "Sin cambio respecto al mes anterior."

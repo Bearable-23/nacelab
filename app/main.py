@@ -35,16 +35,23 @@ def tarjeta(fila, meta: dict):
     """Un indicador con su interpretación, no solo su número."""
     nombre = meta.get(fila.serie_id, {}).get("nombre", fila.serie_id)
 
+    # `sin_dato` y no `is not None`: en una columna FLOAT64 un NULL de
+    # BigQuery llega como NaN, y NaN pasa la prueba de `is not None`.
     if fila.serie_id in ES_PRECIOS:
         emoji, frase = interpretacion.semaforo_inflacion(fila.var_anual)
-        valor_grande = f"{fila.var_anual:.2f}%" if fila.var_anual is not None else "—"
+        falta = interpretacion.sin_dato(fila.var_anual)
+        valor_grande = "—" if falta else f"{fila.var_anual:.2f}%"
         etiqueta = f"{emoji} {nombre} · variación anual"
     else:
         frase = ""
         valor_grande = f"{fila.valor:,.0f}"
         etiqueta = nombre
 
-    delta = f"{fila.var_mensual:+.2f}% mensual" if fila.var_mensual is not None else None
+    delta = (
+        None
+        if interpretacion.sin_dato(fila.var_mensual)
+        else f"{fila.var_mensual:+.2f}% mensual"
+    )
     st.metric(etiqueta, valor_grande, delta)
     st.caption(f"Último dato: {fila.fecha}")
     if frase:
@@ -145,7 +152,7 @@ def main():
         st.markdown(f"**{meta[elegida]['nombre']}**")
         st.markdown(f"Último dato: `{ultimo.fecha}`")
         st.markdown(f"Valor: `{ultimo.valor:,.4f}`")
-        if ultimo.var_anual is not None:
+        if not interpretacion.sin_dato(ultimo.var_anual):
             st.markdown(f"Variación anual: `{ultimo.var_anual:.2f}%`")
             st.caption(
                 interpretacion.contexto_historico(
