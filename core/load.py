@@ -191,6 +191,18 @@ def contar(cliente: bigquery.Client) -> int:
     return list(cliente.query(q).result())[0].n
 
 
+def contar_por_serie(cliente: bigquery.Client) -> dict[str, int]:
+    """Filas por serie.
+
+    El total no basta para juzgar una carga. Si bronze crece, hay dos causas
+    posibles y son opuestas: llegó una serie nueva (correcto) o el MERGE está
+    duplicando filas de una que ya estaba (grave). Distinguirlas requiere
+    saber DE QUÉ serie salieron las filas nuevas.
+    """
+    q = f"SELECT serie_id, COUNT(*) AS n FROM `{ref(cliente, TABLA)}` GROUP BY serie_id"
+    return {r.serie_id: r.n for r in cliente.query(q).result()}
+
+
 def merge_a_bronze(cliente: bigquery.Client) -> dict[str, int]:
     """Consolida staging en bronze.serie_obs de forma idempotente.
 

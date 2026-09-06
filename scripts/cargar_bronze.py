@@ -131,9 +131,11 @@ def main() -> int:
     print(f"  {n} filas en staging")
 
     linea("4. MERGE a bronze")
-    antes = load.contar(cliente)
+    antes_serie = load.contar_por_serie(cliente)
+    antes = sum(antes_serie.values())
     resultado = load.merge_a_bronze(cliente)
-    despues = load.contar(cliente)
+    despues_serie = load.contar_por_serie(cliente)
+    despues = sum(despues_serie.values())
 
     print(f"  filas antes:     {antes:>6}")
     print(f"  filas después:   {despues:>6}")
@@ -144,19 +146,45 @@ def main() -> int:
         print("     en serie_obs_historial, no se perdió)")
 
     linea("IDEMPOTENCIA")
+
+    # Crecer NO es un fallo, y tratarlo como tal era una falsa alarma que
+    # gritaba justo cuando todo iba bien: al cargar el FIX por primera vez,
+    # bronze pasó de 821 a 9,572 filas y el script anunció que el MERGE
+    # estaba roto. No lo estaba — eran 8,751 observaciones de una serie que
+    # no existía.
+    #
+    # Hay dos causas opuestas para que bronze crezca:
+    #   serie que NO estaba antes  -> correcto, siempre
+    #   serie que YA estaba        -> correcto solo si la fuente publicó
+    #                                 datos nuevos; si no, son duplicados
+    #
+    # El total no distingue una de otra. El desglose por serie sí.
+    nuevas = {s: despues_serie[s] - antes_serie.get(s, 0)
+              for s in despues_serie
+              if despues_serie[s] != antes_serie.get(s, 0)}
+
     if antes == 0:
         print("  Primera carga. Corre el script otra vez:")
-        print("  el conteo NO debe cambiar y las filas afectadas deben ser 0.")
-    elif despues == antes and resultado["revisiones_archivadas"] == 0:
+        print("  el conteo NO debe cambiar y las filas nuevas deben ser 0.")
+    elif not nuevas and resultado["revisiones_archivadas"] == 0:
         print("  ✓ Nada cambió. El MERGE es idempotente.")
-    elif despues == antes:
+    elif not nuevas:
         print(f"  ✓ Sin filas nuevas, pero cambiaron "
               f"{resultado['revisiones_archivadas']} valores.")
-        print("    Correcto si el INEGI revisó datos; sospechoso si no.")
+        print("    Correcto si la fuente revisó datos; sospechoso si no.")
         print("    Qué cambió exactamente: consulta serie_obs_historial.")
     else:
-        print(f"  ✗ Aparecieron {despues - antes} filas de más.")
-        print("    El MERGE está insertando en vez de actualizar: revisa el ON.")
+        estrenos = [s for s in nuevas if s not in antes_serie]
+        crecidas = [s for s in nuevas if s in antes_serie]
+        for s in estrenos:
+            print(f"  ✓ {s}: {nuevas[s]} filas. Serie nueva en bronze.")
+        for s in crecidas:
+            print(f"  · {s}: +{nuevas[s]} filas sobre las "
+                  f"{antes_serie[s]} que ya tenía.")
+        if crecidas:
+            print("    Correcto si la fuente publicó datos nuevos.")
+        print("\n    La idempotencia NO se puede afirmar con una sola corrida:")
+        print("    vuelve a correr el script y el conteo no debe moverse.")
     return 0
 
 

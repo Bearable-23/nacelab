@@ -66,10 +66,21 @@ series:
     # el promedio mensual — los precios se forman a lo largo del mes. Si algún
     # día interesa el cierre, se cambia esta línea y se reconstruye el panel.
     agregacion: promedio
-    verificado: false
+    verificado: true
     nota: >
-      Documentado como "Pesos por Dólar. FIX" en el SIE. Sin probar todavía:
-      falta BANXICO_TOKEN.
+      CONFIRMADO 2026-09-05. 8,751 observaciones, 1991-11-12 a 2026-09-04.
+      Banxico es más fácil de verificar que el INEGI: su API devuelve el
+      título de la serie, y dice literalmente "Pesos por dólar E.U.A. Tipo
+      de cambio para solventar obligaciones denominadas en moneda
+      extranjera Fecha de determinación (FIX)". No hizo falta el ritual de
+      cuadrar contra un boletín.
+      Cuatro comprobaciones independientes del título: 251.4 observaciones
+      por año (hábil-diaria, no diaria natural, que daría 365); CERO
+      sábados y cero domingos en 8,751 observaciones; rango 3.06 a 25.12
+      MXN/USD, que es la historia del peso desde 1991; y último dato del
+      día anterior a la consulta.
+      Es la primera serie hábil-diaria del proyecto y por tanto la primera
+      que ejercita la tolerancia de 7 días con datos reales.
 
   # ------------------------------------------------------------------ INEGI --
   - id: poblacion_total
