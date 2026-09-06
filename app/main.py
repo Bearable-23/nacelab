@@ -24,10 +24,37 @@ from app import datos, filtros, vistas  # noqa: E402
 
 load_dotenv()
 
-st.set_page_config(page_title="nacelab", page_icon="📊", layout="wide")
+# La marca. Los PNG viven en app/marca/ y no en una carpeta de recursos aparte
+# por una razón práctica: el Dockerfile copia carpetas una por una, y `app/` ya
+# está en la lista. Una carpeta nueva en la raíz habría que acordarse de
+# agregarla, y el sitio se desplegaría sin marca sin que nada fallara — que es
+# exactamente lo que ya pasó una vez con .streamlit/config.toml.
+MARCA = Path(__file__).resolve().parent / "marca"
+# El horizontal, no el vertical. st.logo mete el logotipo en la cabecera de la
+# barra lateral, que tiene altura fija: el lockup original, casi cuadrado, se
+# encogía a 31x32 px y la palabra NACELAB quedaba ilegible. Comprobado en el
+# navegador antes de cambiarlo.
+LOGO = MARCA / "nacelab_logo_h.png"
+ICONO = MARCA / "nacelab_icono.png"
+
+st.set_page_config(
+    page_title="nacelab",
+    # El símbolo solo, sin la palabra: a 16 píxeles el texto de un logotipo no
+    # se lee y solo ensucia la forma.
+    page_icon=str(ICONO),
+    layout="wide",
+)
 
 
 def main():
+    # Va antes que cualquier otra cosa de la barra lateral: st.logo se ancla
+    # arriba del todo, encima del menú que genera st.navigation.
+    #
+    # `icon_image` es lo que se ve cuando la barra lateral está plegada, donde
+    # no cabe el lockup completo. Sin él, Streamlit encoge el logotipo entero
+    # hasta que la palabra NACELAB queda ilegible.
+    st.logo(str(LOGO), icon_image=str(ICONO), size="large")
+
     meta = datos.catalogo()
     secciones = datos.secciones()
 
