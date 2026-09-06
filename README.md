@@ -102,6 +102,29 @@ tarjeta muestra nivel o variación, dónde va la línea de referencia, cómo se 
 serie a frecuencia mensual y cuántos días puede retroceder para hallar su dato de
 comparación.
 
+### Dónde se encuentran las claves
+
+Los tokens y las claves salen de sitios distintos, y solo los primeros estaban
+documentados aquí:
+
+| Para qué | Dónde |
+|---|---|
+| Clave de un indicador del INEGI | [Constructor de consultas](https://inegi.org.mx/app/querybuilder2/default.html?2.0=) |
+| Explorar indicadores del INEGI por tema | [Banco de Indicadores](https://www.inegi.org.mx/app/indicadores/) |
+| Id de una serie de Banxico (tipo `SF43718`) | [SIE](https://www.banxico.org.mx/SieInternet/) |
+
+El BIE viejo (`inegi.org.mx/sistemas/bie/`) responde 500 y no sirve para esto, igual
+que `BIE` a secas ya no sirve como parámetro de banco.
+
+Una vez que tengas la clave, antes de escribirla en el catálogo:
+
+```bash
+python scripts/probar_series.py --id 736181
+```
+
+Interroga los dos bancos, calcula el salto típico entre observaciones y avisa si la
+serie lleva meses sin actualizarse.
+
 ### Sobre los ids de series
 
 Un id copiado de un ejemplo de documentación **no es un id verificado**. El catálogo
