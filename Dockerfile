@@ -18,6 +18,8 @@ COPY sql/     ./sql/
 # vuelve a seguir la preferencia del sistema operativo de cada visitante:
 # se veria distinto en produccion que en local, y sin ningun error visible.
 COPY .streamlit/ ./.streamlit/
+# El job de ingesta corre desde esta misma imagen, con otro entrypoint.
+COPY scripts/ ./scripts/
 
 ENV GCP_PROJECT=nacelab-prod
 ENV PYTHONUNBUFFERED=1

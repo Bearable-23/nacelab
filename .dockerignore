@@ -24,7 +24,12 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Nada de esto lo necesita la app en tiempo de ejecución.
-scripts/
+#
+# `scripts/` SÍ viaja desde que existe el job de ingesta: corre desde la misma
+# imagen que el sitio. Una sola imagen para las dos cosas garantiza que el job
+# y la app comparten exactamente el mismo core/ y el mismo catálogo. Con dos
+# imágenes, una podría quedarse atrás y el sitio serviría datos calculados con
+# una versión del código distinta de la que dice mostrar.
 notebooks/
 data/
 *.parquet
