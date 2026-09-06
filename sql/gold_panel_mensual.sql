@@ -19,9 +19,10 @@
 -- LO QUE ESTE MODELO NO HACE
 -- --------------------------
 -- No rellena huecos. Una serie decenal como los censos deja casi todos los
--- meses vacíos, y así debe verse: rellenar hacia adelante convertiría 15
--- observaciones reales en 1,300 inventadas, y una regresión sobre eso daría
--- errores estándar ridículamente pequeños sin que nada pareciera roto.
+-- meses vacíos, y así debe verse: los 15 censos de población entre 1910 y 2020,
+-- rellenados hacia adelante sobre la rejilla mensual completa, se convertirían
+-- en 1,399 valores inventados, y una regresión sobre eso daría errores estándar
+-- ridículamente pequeños sin que nada pareciera roto.
 -- Interpolar es una decisión de quien analiza, tomada a la vista, no algo que
 -- el almacén deba hacer a escondidas.
 

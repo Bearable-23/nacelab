@@ -177,12 +177,104 @@ def probar_inegi(series, defaults: dict, crudo: bool) -> None:
         resumen_observaciones(fetch.inegi_parsear(payload, serie.id), serie.id)
 
 
+def interrogar_candidato(clave: str, defaults: dict) -> None:
+    """Enseña qué hay detrás de una clave que todavía NO está en el catálogo.
+
+    Sirve para el momento en que sacas una clave del constructor de consultas
+    y quieres saber qué es antes de escribirla en el YAML.
+
+    Prueba los DOS bancos porque cuál toca no se puede saber de antemano:
+    BIE-BISE sirve para los económicos de coyuntura y BISE para censos y
+    encuestas, y el que no toca responde 400. Probar ambos evita concluir
+    que una clave no existe cuando lo que estaba mal era el banco.
+
+    Ojo con lo que este informe NO te dice: FREQ, UNIT, TOPIC y SOURCE son
+    CÓDIGOS de catálogo, no texto. `UNIT: 1012` no dice "índice". No sirven
+    para identificar una serie a ojo; sirven para comparar contra una serie
+    que ya tengas verificada. Lo que de verdad identifica es el ÚLTIMO VALOR
+    contra la cifra que el INEGI publicó en su boletín.
+    """
+    print(f"\n  ── clave {clave} " + "─" * (54 - len(clave)))
+    encontrada = False
+
+    for banco in ("BIE-BISE", "BISE"):
+        try:
+            payload, _ = fetch.inegi_crudo(
+                indicador=clave,
+                idioma=defaults.get("idioma", "es"),
+                entidad=defaults.get("entidad", "00"),
+                dato_reciente=False,
+                banco=banco,
+                version=defaults.get("version", "2.0"),
+            )
+        except Exception:  # noqa: BLE001
+            print(f"     banco {banco:<9} → no responde")
+            continue
+
+        bloques = payload.get("Series", [])
+        if not bloques:
+            print(f"     banco {banco:<9} → responde pero sin 'Series'")
+            continue
+
+        encontrada = True
+        meta = bloques[0]
+        obs = fetch.inegi_parsear(payload, clave)
+        print(f"     banco {banco:<9} → OK")
+        print(f"       FREQ={meta.get('FREQ')} UNIT={meta.get('UNIT')} "
+              f"TOPIC={meta.get('TOPIC')} SOURCE={meta.get('SOURCE')}")
+        print(f"       LASTUPDATE  {meta.get('LASTUPDATE')}")
+
+        if not obs:
+            print("       sin observaciones")
+            continue
+
+        print(f"       {len(obs)} obs · {obs[0].fecha} → {obs[-1].fecha}")
+        print("       últimos 3: " + ", ".join(
+            f"{o.fecha}={o.valor:,.4f}" for o in obs[-3:]))
+
+        # El intervalo típico entre observaciones delata la frecuencia real
+        # mejor que el código FREQ, que hay que resolver contra un catálogo.
+        if len(obs) > 3:
+            saltos = [(obs[i + 1].fecha - obs[i].fecha).days
+                      for i in range(len(obs) - 1)]
+            tipico = sorted(saltos)[len(saltos) // 2]
+            nombre = {1: "diaria", 7: "semanal", 15: "quincenal", 30: "mensual",
+                      31: "mensual", 90: "trimestral", 91: "trimestral",
+                      92: "trimestral", 365: "anual", 366: "anual"}.get(tipico)
+            print(f"       salto típico entre datos: {tipico} días"
+                  f"{f'  (≈ {nombre})' if nombre else ''}")
+
+        alerta_serie_vieja(meta.get("LASTUPDATE"), "mensual")
+
+    if not encontrada:
+        print("     ✗ Ningún banco responde. La clave no existe, o el "
+              "indicador no está en el Banco de Indicadores.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prueba las series del catálogo")
     parser.add_argument("--crudo", action="store_true", help="imprime el JSON completo")
+    parser.add_argument(
+        "--id", action="append", metavar="CLAVE", default=[],
+        help="interroga una clave suelta que aún no está en el catálogo "
+             "(se puede repetir). No toca el catálogo ni BigQuery.",
+    )
     args = parser.parse_args()
 
     series, defaults = cargar_catalogo()
+
+    if args.id:
+        linea("CANDIDATOS — claves sueltas, todavía fuera del catálogo")
+        for clave in args.id:
+            interrogar_candidato(clave, defaults)
+        linea("QUÉ HACER CON ESTO")
+        print("Compara el último valor con el que el INEGI publicó en su")
+        print("boletín. Esa es la prueba que identifica una serie; los códigos")
+        print("de FREQ y UNIT solo sirven para compararla con otra que ya")
+        print("tengas verificada. Si cuadra, agrégala al catálogo con")
+        print("`verificado: false` y vuelve a correr esto sin --id.")
+        return 0
+
     print(f"Catálogo: {len(series)} series")
 
     sin_verificar = [s for s in series if not s.verificado]
