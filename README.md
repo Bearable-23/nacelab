@@ -1,15 +1,15 @@
 # nacelab
 
 Plataforma pública de datos económicos de México. Indicadores oficiales del INEGI y
-Banxico, con el código que los obtiene a la vista.
+Banxico, actualizados a diario, con el código que los obtiene a la vista.
 
 > **Principio:** todo resultado debe poder seguirse hasta su origen.
 
 **En línea:** https://nacelab-314189642979.us-central1.run.app
 
-**Estado:** el pipeline funciona de punta a punta y el sitio está publicado. Tres
-series verificadas. **La ingesta se corre a mano**, así que los datos se actualizan
-cuando alguien ejecuta el job — automatizarla con Cloud Scheduler sigue pendiente.
+**Estado:** cuatro series verificadas. La ingesta corre sola cada día a las 19:00 de
+Ciudad de México y avisa por correo si falla — o si termina bien pero deja datos
+viejos, que es el modo de falla que de verdad importa.
 
 ---
 
@@ -84,8 +84,30 @@ API  →  bronze.serie_obs  →  gold.gold_indicador     →  Streamlit
 ```bash
 python scripts/cargar_bronze.py     # API -> bronze
 python scripts/construir_gold.py    # bronze -> gold (los dos modelos)
+python scripts/job_diario.py        # los dos anteriores + revisión de frescura
 streamlit run app/main.py           # ver el sitio
 ```
+
+### El job programado
+
+`job_diario.py` es lo que corre solo. Cloud Scheduler lo dispara a las 19:00 de CDMX y
+un Job de Cloud Run lo ejecuta **desde la misma imagen que el sitio**, para que el job
+y la app no puedan discrepar de versión.
+
+Corre con `sa-job`, que **no tiene un solo permiso en BigQuery**: solo puede pedir
+tokens prestados de `sa-ingest` y `sa-transform`. Cada escritura sigue ocurriendo con
+la identidad mínima, igual que en la laptop, y un job comprometido no podría tocar
+BigQuery por sí mismo. Los tokens de las APIs vienen de Secret Manager, nunca de la
+imagen.
+
+Lo importante no es que encadene los dos pasos, sino que **compruebe el resultado**:
+terminar sin excepción no significa que la corrida sirviera. Una ingesta que corre, no
+falla y no trae nada es el modo de falla silencioso que hay que cazar. Si algún dato
+quedó viejo, o si una serie verificada no aparece en gold, sale con error para que
+salte la alerta.
+
+Un job automático que falla callado es peor que uno manual: el manual al menos tiene
+un humano que nota lo raro.
 
 Regla: **si algo calcula, va en `core/`. Si algo dibuja, va en la app.**
 El día que llegue otro frontend, `core/` no se toca.
@@ -147,11 +169,13 @@ perfectamente normal. Lo único que las delata es `LASTUPDATE`.
 que le falta un mes compara contra hace trece y devuelve un número plausible y falso.
 El join por fecha devuelve nulo cuando no hay contra qué comparar.
 
-**Con tolerancia por frecuencia.** Una serie hábil-diaria no cotiza fines de semana, así
-que "hace exactamente un mes" muchas veces no existe: la regla estricta dejaría un 37%
-de la serie sin variación. Para esas se acepta el dato anterior más cercano dentro de
-una ventana declarada — siempre hacia atrás, nunca hacia adelante — y gold registra
-contra qué fecha comparó realmente.
+**Con tolerancia por frecuencia.** Una serie hábil-diaria no cotiza fines de semana ni
+festivos, así que "hace exactamente un mes" muchas veces no existe. Medido sobre el
+tipo de cambio real: la regla estricta dejaba **39.8%** de la serie sin variación
+mensual. Para esas se acepta el dato anterior más cercano dentro de una ventana
+declarada — siempre hacia atrás, nunca hacia adelante — y gold registra contra qué
+fecha comparó realmente. El retroceso máximo observado es de 4 días sobre una
+tolerancia de 7, así que la ventana tiene margen sin ser arbitraria.
 
 **Las revisiones se guardan.** El INEGI revisa datos históricos. El MERGE pisaba el
 valor anterior y desaparecía, lo cual da igual para un tablero y es fatal para evaluar
@@ -167,7 +191,8 @@ estándar ridículamente pequeños sin que nada pareciera roto.
 
 ## Pruebas
 
-Todas se corren a mano; **no hay CI todavía**.
+Se corren a mano; **no hay CI todavía**. El job programado sí corre solo, pero solo
+ejecuta el pipeline: no pasa estas pruebas antes de desplegar nada.
 
 ```bash
 python scripts/probar_series.py      # ¿los ids son lo que creemos?

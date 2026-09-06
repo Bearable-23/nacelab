@@ -85,12 +85,12 @@ def linea(t: str = "") -> None:
         print("=" * 70, flush=True)
 
 
-def paso(nombre: str, script: str) -> None:
+def paso(nombre: str, script: str, extra: list[str] | None = None) -> None:
     """Corre un script del pipeline. Si falla, revienta el job entero."""
     linea(nombre)
     inicio = time.monotonic()
     r = subprocess.run(
-        [sys.executable, str(RAIZ / "scripts" / script)],
+        [sys.executable, str(RAIZ / "scripts" / script), *(extra or [])],
         cwd=RAIZ,
     )
     segundos = time.monotonic() - inicio
@@ -176,7 +176,10 @@ def main() -> int:
     print(f"  identidad base: {bq.identidad()}", flush=True)
 
     paso("1. Ingesta a bronze", "cargar_bronze.py")
-    paso("2. Construcción de gold", "construir_gold.py")
+    # Sin la prueba de sa-app: este job corre como sa-job, que a propósito no
+    # puede pedir el token de la cuenta del sitio. Darle ese permiso para
+    # ejecutar una aserción sería ampliar privilegios por comodidad.
+    paso("2. Construcción de gold", "construir_gold.py", ["--sin-prueba-sa-app"])
 
     linea("3. Frescura de los datos que quedaron")
     problemas = revisar_frescura(args.tolerancia_dias)

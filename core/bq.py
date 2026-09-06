@@ -22,10 +22,30 @@ from __future__ import annotations
 import os
 
 import google.auth
+import requests
 from google.auth import impersonated_credentials
 from google.cloud import bigquery
 
 ALCANCE = ["https://www.googleapis.com/auth/cloud-platform"]
+
+# El servidor de metadatos de Google, que solo responde dentro de GCP.
+METADATOS = (
+    "http://metadata.google.internal/computeMetadata/v1/"
+    "instance/service-accounts/default/email"
+)
+
+
+def sa_adjunta() -> str:
+    """Con qué service account viene corriendo este contenedor. "" fuera de GCP.
+
+    Se pregunta en vez de deducirlo de variables de entorno, y esa distinción
+    costó un job fallido.
+    """
+    try:
+        r = requests.get(METADATOS, headers={"Metadata-Flavor": "Google"}, timeout=2)
+        return r.text.strip() if r.ok else ""
+    except requests.RequestException:
+        return ""  # no estamos en GCP: en una laptop no hay servidor de metadatos
 
 
 def cliente(proyecto: str | None = None, sa: str | None = None) -> bigquery.Client:
@@ -40,8 +60,34 @@ def cliente(proyecto: str | None = None, sa: str | None = None) -> bigquery.Clie
     if not proyecto:
         raise RuntimeError("Falta la variable de entorno GCP_PROJECT.")
 
-    if sa and not os.environ.get("K_SERVICE"):  # K_SERVICE solo existe en Cloud Run
-        os.environ["IMPERSONATE_SA"] = f"{sa}@{proyecto}.iam.gserviceaccount.com"
+    # A quién queremos ser: la cuenta pedida, o la de IMPERSONATE_SA si no se
+    # pidió ninguna (que es como funciona en la laptop).
+    objetivo = (
+        f"{sa}@{proyecto}.iam.gserviceaccount.com"
+        if sa
+        else os.environ.get("IMPERSONATE_SA", "").strip()
+    )
+
+    # Se suplanta solo si NO somos ya esa cuenta.
+    #
+    # La versión anterior decidía esto mirando K_SERVICE, con el razonamiento
+    # de que "en Cloud Run la cuenta va adjunta, así que no hay nada que
+    # suplantar". Eso era cierto mientras el único despliegue fuera el sitio,
+    # donde la cuenta adjunta (sa-app) ES la que se necesita.
+    #
+    # Dejó de serlo con el job programado: ahí la cuenta adjunta es sa-job,
+    # que a propósito no tiene ningún permiso en BigQuery y solo sirve para
+    # pedir tokens prestados. Con la regla vieja el job NO suplantaba, corría
+    # como sa-job y moría con un 403 sobre bronze.
+    #
+    # Preguntar la identidad real al servidor de metadatos acierta en los tres
+    # entornos sin configurar nada:
+    #     laptop  adjunta=""        objetivo=sa-ingest    -> suplanta
+    #     sitio   adjunta=sa-app    objetivo=sa-app       -> no suplanta
+    #     job     adjunta=sa-job    objetivo=sa-ingest    -> suplanta
+    suplantar = objetivo if objetivo and objetivo != sa_adjunta() else ""
+    if suplantar:
+        os.environ["IMPERSONATE_SA"] = suplantar
 
     # `quota_project_id` decide a qué proyecto se le factura el uso de las APIs,
     # que no es lo mismo que el proyecto al que accedes. Si no se fija, se usa
@@ -50,7 +96,6 @@ def cliente(proyecto: str | None = None, sa: str | None = None) -> bigquery.Clie
     # Fijarlo aquí evita tener que cambiar tu configuración global de gcloud.
     credenciales, _ = google.auth.default(scopes=ALCANCE, quota_project_id=proyecto)
 
-    suplantar = os.environ.get("IMPERSONATE_SA", "").strip()
     if suplantar:
         credenciales = impersonated_credentials.Credentials(
             source_credentials=credenciales,
@@ -62,10 +107,19 @@ def cliente(proyecto: str | None = None, sa: str | None = None) -> bigquery.Clie
 
 
 def identidad() -> str:
-    """Con qué identidad estamos corriendo. Útil para no depurar a ciegas."""
+    """Con qué identidad estamos corriendo. Útil para no depurar a ciegas.
+
+    Dice también cuál es la cuenta ADJUNTA, no solo a quién se suplanta. Sin
+    ese dato, el log de un job fallido decía "credenciales por defecto" y no
+    había forma de saber cuáles eran: la pregunta era justo esa.
+    """
+    adjunta = sa_adjunta()
     suplantar = os.environ.get("IMPERSONATE_SA", "").strip()
     if suplantar:
-        return f"suplantando a {suplantar}"
+        desde = adjunta or "credenciales locales"
+        return f"suplantando a {suplantar} desde {desde}"
+    if adjunta:
+        return f"cuenta adjunta {adjunta} (sin suplantar)"
     credenciales, _ = google.auth.default(scopes=ALCANCE)
     correo = getattr(credenciales, "service_account_email", None)
     return f"credenciales por defecto ({correo or 'usuario'})"

@@ -102,7 +102,12 @@ def main() -> int:
     if omitidas:
         print(f"  Omitidas por no estar verificadas: {', '.join(omitidas)}")
 
-    cliente = bq.cliente(os.environ["GCP_PROJECT"])
+    # `sa="sa-ingest"` explícito, como construir_gold.py pide sa-transform.
+    # Antes se dejaba en blanco y se confiaba en IMPERSONATE_SA del .env, que
+    # existe en la laptop y NO existe dentro del contenedor: el job corría con
+    # la cuenta adjunta y moría con un 403 sobre bronze. Qué identidad necesita
+    # cada paso es parte del paso, no de la configuración del entorno.
+    cliente = bq.cliente(os.environ["GCP_PROJECT"], sa="sa-ingest")
     print(f"  Identidad: {bq.identidad()}")
 
     load.asegurar_tabla(cliente)

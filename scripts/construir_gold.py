@@ -32,6 +32,17 @@ def linea(t=""):
 
 
 def main() -> int:
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument(
+        "--sin-prueba-sa-app", action="store_true",
+        help="omite la comprobación de permisos de sa-app. La usa el job "
+             "programado, cuya identidad no puede —ni debe— pedir el token "
+             "de la cuenta del sitio.",
+    )
+    args = p.parse_args()
+
     linea("1. Construyendo gold")
     cliente = bq.cliente(PROYECTO, sa="sa-transform")
     print(f"  Identidad: {bq.identidad()}")
@@ -57,6 +68,22 @@ def main() -> int:
         anual = f"{f.var_anual:.2f}" if f.var_anual is not None else "—"
         pct = f"{f.percentil:.3f}" if f.percentil is not None else "—"
         print(f"  {str(f.fecha):<12}{f.valor:>10}{mes:>10}{anual:>12}{pct:>9}")
+
+    # Comprobar los permisos de sa-app exige poder pedir SU token, y eso es
+    # un privilegio que no toda identidad debe tener. El job programado corre
+    # como sa-job, que solo puede pedir prestados los de sa-ingest y
+    # sa-transform: darle también el de sa-app le permitiria actuar como el
+    # sitio publico, y solo para ejecutar una asercion.
+    #
+    # Se omite explicitamente y con aviso, no en silencio. Es una propiedad
+    # de la configuracion de IAM, no del build: no cambia porque haya corrido
+    # una carga, y probar_bq.py la comprueba desde una identidad que si puede.
+    if args.sin_prueba_sa_app:
+        linea("3. Permisos de sa-app: OMITIDO")
+        print("  Esta identidad no puede pedir el token de sa-app, y es a")
+        print("  proposito. La frontera se comprueba con probar_bq.py o al")
+        print("  correr este script a mano.")
+        return 0
 
     linea("3. ¿Puede sa-app leer gold?")
     # Esta es la prueba que importa: es la cuenta con la que va a correr el
